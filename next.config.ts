@@ -1,7 +1,20 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'yonodmc.in',
+          },
+        ],
+        destination: 'https://www.yonodmc.in/:path*',
+        permanent: true, // 301 redirect
+      },
+    ];
+  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
