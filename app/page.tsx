@@ -83,7 +83,7 @@ export default function HomePage() {
               <p className="text-gray-600">Quick & easy assistance.</p>
             </div>
           </div>
-        </div>
+        </div> 
       </section>
     </>
   );
