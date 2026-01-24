@@ -42,8 +42,8 @@ export default function PackageCard({ package: pkg }: Props) {
           </div>
 
           <Link
-            href={`/holidays/${pkg.slug}`}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-medium"
+  href={`/holidays/${pkg.slug}`}
+  className="bg-primary text-white px-5 py-2.5 rounded-lg"
           >
             View Details
           </Link>
