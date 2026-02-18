@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  packages,
-  destinations,
+  destinations as seedDestinations,
+  packages as seedPackages,
   testimonials,
   whatsappLink,
 } from "@/data/mockData";
@@ -26,6 +26,39 @@ export default function HomePage() {
   const [searchTab, setSearchTab] = useState<
     "holidays" | "flights" | "hotels" | "visa"
   >("holidays");
+  const [packages, setPackages] = useState(seedPackages);
+  const [destinations, setDestinations] = useState(seedDestinations);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCatalog() {
+      try {
+        const response = await fetch("/api/catalog");
+        if (!response.ok) return;
+
+        const data = (await response.json()) as {
+          packages?: typeof seedPackages;
+          destinations?: typeof seedDestinations;
+        };
+        if (!active) return;
+
+        if (Array.isArray(data.packages) && data.packages.length > 0) {
+          setPackages(data.packages);
+        }
+        if (Array.isArray(data.destinations) && data.destinations.length > 0) {
+          setDestinations(data.destinations);
+        }
+      } catch {
+        // Keep seeded fallback data if catalog fetch fails.
+      }
+    }
+
+    void loadCatalog();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen">
@@ -92,7 +125,7 @@ export default function HomePage() {
                     {d.name}
                   </h3>
                   <Link
-                    href={`/holidays/${d.name.toLowerCase()}`}
+                    href="/packages"
                     className="text-blue-600 font-medium hover:text-blue-700 text-lg md:text-base"
                   >
                     View Packages &rarr;

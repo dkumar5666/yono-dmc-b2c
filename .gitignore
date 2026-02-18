@@ -23,6 +23,9 @@
 # misc
 .DS_Store
 *.pem
+/.runtime/
+/public/uploads/*
+!/public/uploads/.gitkeep
 
 # debug
 npm-debug.log*

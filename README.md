@@ -28,6 +28,85 @@ The app serves travel images through `/api/images/[key]` so the key stays server
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Backend MVP APIs
+
+### Flights
+
+- `GET /api/flights?from=DEL&to=DXB&date=2026-03-10`
+- `POST /api/flights/search`
+
+Request body:
+
+```json
+{
+  "from": "DEL",
+  "to": "DXB",
+  "date": "2026-03-10",
+  "adults": 1,
+  "travelClass": "ECONOMY",
+  "currency": "INR"
+}
+```
+
+### Bookings
+
+- `POST /api/bookings` create booking
+- `GET /api/bookings` list bookings
+- `GET /api/bookings?status=confirmed&from=2026-02-01&to=2026-02-28` list with filters
+- `GET /api/bookings/:id` fetch booking
+- `PATCH /api/bookings/:id` update status/fields (pnr, ticketNumbers, issuedAt, issuedBy, notes)
+- `POST /api/bookings/:id/cancel` cancel booking with reason
+
+Admin-protected endpoints:
+
+- `GET /api/bookings`
+- `PATCH /api/bookings/:id`
+- `POST /api/bookings/:id/cancel`
+
+Admin auth header:
+
+- `x-admin-token: <ADMIN_API_TOKEN>` or
+- `Authorization: Bearer <ADMIN_API_TOKEN>`
+
+### Payments
+
+- `POST /api/payments/intent` create payment intent
+- `POST /api/payments/confirm` confirm payment and booking
+
+### Runtime storage
+
+Bookings and payment intents are persisted locally at `.runtime/bookings.json`
+(development-friendly storage for MVP).
+
+Notification payload stubs are logged at `.runtime/notifications.json`.
+
+## Admin setup
+
+Add admin token in `.env.local`:
+
+```bash
+ADMIN_API_TOKEN=your_secure_admin_token
+```
+
+Role-based admin login setup:
+
+```bash
+AUTH_SESSION_SECRET=strong_random_secret
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change_this_password
+EDITOR_USERNAME=ops_user
+EDITOR_PASSWORD=change_this_password
+```
+
+Admin UI:
+
+- `GET /admin/login`
+- `GET /admin/catalog`
+
+Image upload API (admin/editor session required):
+
+- `POST /api/admin/uploads` with `multipart/form-data` field `file`
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More

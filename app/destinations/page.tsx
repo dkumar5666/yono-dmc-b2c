@@ -1,10 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import DestinationCard from "@/components/DestinationCard";
 import WhatsAppButton from "@/components/WhatsAppButton";
-import { destinations } from "@/data/mockData";
+import { Destination, destinations as seedDestinations } from "@/data/mockData";
 
 export default function DestinationsPage() {
+  const [destinations, setDestinations] = useState<Destination[]>(seedDestinations);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch("/api/catalog");
+        if (!response.ok) return;
+        const data = (await response.json()) as { destinations?: Destination[] };
+        if (Array.isArray(data.destinations) && data.destinations.length > 0) {
+          setDestinations(data.destinations);
+        }
+      } catch {
+        // Keep fallback seed destinations
+      }
+    })();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ================= HERO ================= */}

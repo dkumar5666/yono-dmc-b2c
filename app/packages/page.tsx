@@ -1,14 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import { packages } from "@/data/mockData";
+import { useEffect, useState } from "react";
+import { Package, packages as seedPackages } from "@/data/mockData";
 import PackageCard from "@/components/PackageCard";
 import { Filter } from "lucide-react";
 
 export default function PackagesPage() {
+  const [packages, setPackages] = useState<Package[]>(seedPackages);
   const [selectedDestination, setSelectedDestination] = useState("all");
   const [selectedType, setSelectedType] = useState("all");
   const [sortBy, setSortBy] = useState("popular");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch("/api/catalog");
+        if (!response.ok) return;
+        const data = (await response.json()) as { packages?: Package[] };
+        if (Array.isArray(data.packages) && data.packages.length > 0) {
+          setPackages(data.packages);
+        }
+      } catch {
+        // Keep fallback seed packages
+      }
+    })();
+  }, []);
+
+  const destinationOptions = Array.from(
+    new Set(packages.map((pkg) => pkg.destination))
+  ).sort();
 
   const filteredPackages = packages.filter((pkg) => {
     if (
@@ -56,10 +76,11 @@ export default function PackagesPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
               >
                 <option value="all">All Destinations</option>
-                <option value="Dubai">Dubai</option>
-                <option value="Bali">Bali</option>
-                <option value="Singapore">Singapore</option>
-                <option value="Malaysia">Malaysia</option>
+                {destinationOptions.map((destination) => (
+                  <option key={destination} value={destination}>
+                    {destination}
+                  </option>
+                ))}
               </select>
             </div>
 
