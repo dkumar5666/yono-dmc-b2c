@@ -34,20 +34,48 @@ async function fetchPexelsImage(query: string): Promise<string | null> {
   return photo?.large2x ?? photo?.large ?? photo?.landscape ?? photo?.original ?? null;
 }
 
+async function fetchImageBinary(url: string): Promise<Response | null> {
+  const response = await fetch(url, {
+    next: { revalidate: 60 * 60 * 12 },
+  });
+  if (!response.ok) return null;
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.startsWith("image/")) return null;
+
+  const bytes = await response.arrayBuffer();
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      "content-type": contentType,
+      "cache-control": "public, max-age=43200, s-maxage=43200",
+    },
+  });
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ key: string }> | { key: string } }
 ) {
   const params = "then" in context.params ? await context.params : context.params;
-  const key = params.key;
+  const key = params.key.toLowerCase();
 
-  if (!isImageKey(key)) {
-    return NextResponse.json({ error: "Image key not found" }, { status: 404 });
-  }
+  const fallbackEntry = imageCatalog.hero;
+  const entry = isImageKey(key)
+    ? imageCatalog[key]
+    : {
+        query: `${key.replace(/-/g, " ")} travel destination`,
+        fallback: fallbackEntry.fallback,
+      };
 
-  const entry = imageCatalog[key];
   const pexelsUrl = await fetchPexelsImage(entry.query);
-  const destinationUrl = pexelsUrl ?? entry.fallback;
+  const destinationUrl = pexelsUrl ?? entry.fallback ?? fallbackEntry.fallback;
 
-  return NextResponse.redirect(destinationUrl, 307);
+  const directImage = await fetchImageBinary(destinationUrl);
+  if (directImage) return directImage;
+
+  const fallbackImage = await fetchImageBinary(fallbackEntry.fallback);
+  if (fallbackImage) return fallbackImage;
+
+  return NextResponse.json({ error: "Unable to load image" }, { status: 502 });
 }

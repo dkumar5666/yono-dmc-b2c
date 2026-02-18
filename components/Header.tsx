@@ -30,6 +30,12 @@ export default function Header() {
         <div className="flex items-center gap-4">
           <span className="hidden md:block text-sm">+91 99588 39319</span>
           <Link
+            href="/admin/login"
+            className="hidden md:inline-flex border border-slate-300 text-slate-700 px-4 py-2 rounded-full text-sm font-semibold hover:bg-slate-50"
+          >
+            Admin Login
+          </Link>
+          <Link
             href="/contact"
             className="bg-[#f5991c] text-white px-5 py-2 rounded-full text-sm font-semibold"
           >

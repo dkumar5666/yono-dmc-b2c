@@ -71,6 +71,7 @@ export default function HomePage() {
             fill
             className="object-cover"
             priority
+            unoptimized
           />
           <div className="absolute inset-0 bg-gradient-to-r from-blue-900/90 to-teal-900/80" />
         </div>
@@ -118,6 +119,7 @@ export default function HomePage() {
                     fill
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                     className="object-cover"
+                    unoptimized={d.image.startsWith("/api/images/")}
                   />
                 </div>
                 <div className="p-4 md:p-5">

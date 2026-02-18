@@ -37,6 +37,35 @@ function toSlug(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+function normalizeImagePath(raw: unknown): string {
+  const value = String(raw ?? "").trim();
+  if (!value) return "/api/images/hero";
+
+  const normalized = value.replace(/\\/g, "/");
+  if (normalized.startsWith("/api/images/")) {
+    return normalized;
+  }
+  if (normalized.startsWith("api/images/")) {
+    return `/${normalized}`;
+  }
+
+  const apiImagePng = normalized.match(/^\/?api\/images\/([a-z0-9-]+)\.(png|jpg|jpeg|webp)$/i);
+  if (apiImagePng) {
+    return `/api/images/${apiImagePng[1].toLowerCase()}`;
+  }
+
+  if (
+    normalized.startsWith("/uploads/") ||
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("/")
+  ) {
+    return normalized;
+  }
+
+  return `/${normalized}`;
+}
+
 function normalizePackage(input: Partial<Package>, index: number): Package {
   const destination = String(input.destination ?? "").trim();
   const title = String(input.title ?? "").trim() || `Package ${index + 1}`;
@@ -53,7 +82,7 @@ function normalizePackage(input: Partial<Package>, index: number): Package {
     destination: destination || "Destination",
     duration: String(input.duration ?? "4D/3N"),
     price: Number.isFinite(price) && price > 0 ? price : 10000,
-    image: String(input.image ?? "/api/images/hero"),
+    image: normalizeImagePath(input.image),
     inclusions:
       Array.isArray(input.inclusions) && input.inclusions.length > 0
         ? input.inclusions.map((item) => String(item))
@@ -73,7 +102,7 @@ function normalizeDestination(
     id: String(input.id ?? crypto.randomUUID()),
     name,
     tagline: String(input.tagline ?? "Explore this destination"),
-    image: String(input.image ?? "/api/images/hero"),
+    image: normalizeImagePath(input.image),
     packages: Number.isFinite(packages) && packages >= 0 ? packages : 0,
   };
 }
