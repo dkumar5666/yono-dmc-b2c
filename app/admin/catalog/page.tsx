@@ -295,6 +295,9 @@ export default function AdminCatalogPage() {
             <Link href="/admin/ai-conversations" className="text-slate-200 hover:text-white">
               AI Conversations
             </Link>
+            <Link href="/admin/custom-package-requests" className="text-slate-200 hover:text-white">
+              Custom Requests
+            </Link>
             <Link href="/" className="text-slate-200 hover:text-white">
               Back to site
             </Link>
@@ -589,3 +592,5 @@ export default function AdminCatalogPage() {
     </div>
   );
 }
+
+

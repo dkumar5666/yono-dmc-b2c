@@ -1,133 +1,90 @@
+"use client";
+
+import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { Compass, MapPin, Sparkles } from "lucide-react";
-import { holidays } from "@/data/holidays";
+import { Compass, Loader2, MapPin } from "lucide-react";
 
-interface AttractionsPageProps {
-  searchParams?: {
-    destination?: string | string[];
-  };
-}
-
-function readParam(value: string | string[] | undefined, fallback: string): string {
-  if (Array.isArray(value)) return value[0] ?? fallback;
-  return value ?? fallback;
-}
-
-function normalize(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-type AttractionCard = {
-  key: string;
-  title: string;
-  destination: string;
-  summary: string;
-  packageSlug: string;
-  packageTitle: string;
+type Activity = {
+  id: string;
+  name: string;
+  description: string;
+  image: string | null;
+  bookingLink: string | null;
+  amount: number;
+  currency: string;
 };
 
-export default function AttractionsPage({ searchParams }: AttractionsPageProps) {
-  const destination = readParam(searchParams?.destination, "");
-  const q = normalize(destination);
+export default function AttractionsPage() {
+  const [destination, setDestination] = useState("Dubai");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
 
-  const activities: AttractionCard[] = holidays.flatMap((pkg) =>
-    pkg.highlights.map((highlight, idx) => ({
-      key: `${pkg.slug}-${idx}`,
-      title: highlight,
-      destination: pkg.country,
-      summary: pkg.description,
-      packageSlug: pkg.slug,
-      packageTitle: pkg.title,
-    }))
-  );
-
-  const filtered = activities.filter((item) => {
-    if (!q) return true;
-    return (
-      normalize(item.destination).includes(q) ||
-      normalize(item.title).includes(q) ||
-      normalize(item.packageTitle).includes(q)
-    );
-  });
+  async function onSearch(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/activities/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ destination, radius: 20 }),
+      });
+      const data = (await response.json()) as { activities?: Activity[]; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Failed to fetch activities");
+      setActivities(data.activities ?? []);
+      if (!data.activities || data.activities.length === 0) {
+        setError("No activities found for this destination.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch activities");
+      setActivities([]);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-50">
       <section className="bg-slate-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4">
           <h1 className="text-4xl md:text-5xl font-bold">Things To Do</h1>
-          <p className="mt-3 text-slate-200 max-w-3xl">
-            Discover top activities from our destination packages and continue to
-            booking instantly.
-          </p>
+          <p className="mt-3 text-slate-200">Live destination activities using provider inventory.</p>
         </div>
       </section>
 
       <section className="max-w-7xl mx-auto px-4 py-8">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 mb-8 inline-flex items-center gap-2 text-slate-700">
-          <MapPin className="h-4 w-4 text-[#199ce0]" />
-          <span>
-            Destination filter:{" "}
-            <span className="font-semibold">{destination || "All destinations"}</span>
-          </span>
+        <form onSubmit={onSearch} className="rounded-2xl border border-slate-200 bg-white p-5 md:p-6 flex flex-col md:flex-row gap-3">
+          <label className="h-12 flex-1 rounded-xl border border-slate-300 px-3 inline-flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-[#199ce0]" />
+            <input value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Destination city" className="w-full bg-transparent outline-none" required />
+          </label>
+          <button type="submit" disabled={busy} className="h-12 rounded-xl bg-[#199ce0] text-white font-semibold px-6 inline-flex items-center justify-center gap-2 disabled:opacity-70">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Search
+          </button>
+        </form>
+
+        {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {activities.map((item) => (
+            <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
+                <Compass className="h-5 w-5 text-[#199ce0]" />
+              </div>
+              <h2 className="mt-3 text-lg font-bold text-slate-900 leading-snug">{item.name}</h2>
+              <p className="mt-2 text-sm text-slate-600 line-clamp-3">{item.description || "Activity details available after selection."}</p>
+              <p className="mt-3 text-lg font-bold text-[#f5991c]">{item.currency} {item.amount.toLocaleString("en-IN")}</p>
+              <div className="mt-4 flex gap-2">
+                <Link href="/build-package" className="inline-flex flex-1 items-center justify-center rounded-full bg-[#199ce0] px-4 py-2 text-sm font-semibold text-white">Add to Custom Trip</Link>
+                {item.bookingLink ? (
+                  <a href={item.bookingLink} target="_blank" rel="noreferrer" className="inline-flex flex-1 items-center justify-center rounded-full border border-[#199ce0] px-4 py-2 text-sm font-semibold text-[#199ce0]">Details</a>
+                ) : null}
+              </div>
+            </article>
+          ))}
         </div>
-
-        {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-            <p className="text-slate-700">
-              No activities found for <span className="font-semibold">{destination}</span>.
-            </p>
-            <Link
-              href="/holidays"
-              className="mt-4 inline-flex rounded-full bg-[#199ce0] px-5 py-2.5 text-white font-semibold"
-            >
-              Explore Holiday Packages
-            </Link>
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((item) => (
-              <article
-                key={item.key}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50">
-                    <Compass className="h-5 w-5 text-[#199ce0]" />
-                  </span>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">
-                    {item.destination}
-                  </p>
-                </div>
-
-                <h2 className="mt-3 text-xl font-bold text-slate-900 leading-snug">
-                  {item.title}
-                </h2>
-                <p className="mt-2 text-sm text-slate-600 line-clamp-2">{item.summary}</p>
-
-                <div className="mt-4 rounded-xl bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">Mapped Package</p>
-                  <p className="font-semibold text-slate-900">{item.packageTitle}</p>
-                </div>
-
-                <div className="mt-4 flex gap-2">
-                  <Link
-                    href={`/holidays/${item.packageSlug}`}
-                    className="inline-flex flex-1 items-center justify-center rounded-full bg-[#199ce0] px-4 py-2.5 text-white text-sm font-semibold hover:opacity-90"
-                  >
-                    View Package
-                  </Link>
-                  <Link
-                    href="/contact"
-                    className="inline-flex items-center justify-center rounded-full border border-[#f5991c] px-4 py-2.5 text-sm font-semibold text-[#f5991c]"
-                  >
-                    <Sparkles className="mr-1 h-4 w-4" />
-                    Enquire
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
       </section>
     </main>
   );

@@ -8,6 +8,7 @@ import {
   Hotel,
   Landmark,
   Palmtree,
+  CarFront,
   ChevronDown,
   Globe,
   Briefcase,
@@ -69,6 +70,10 @@ export default function Header() {
             <Briefcase size={16} className="text-[#199ce0]" />
             My Trips
           </Link>
+          <Link href="/build-package" className="inline-flex items-center gap-1.5 hover:text-black">
+            <Palmtree size={16} className="text-[#199ce0]" />
+            Build Package
+          </Link>
           <Link href="/login" className="inline-flex items-center gap-1.5 hover:text-black">
             <LogIn size={16} className="text-[#199ce0]" />
             Sign in
@@ -124,6 +129,10 @@ export default function Header() {
                 <Link href="/attractions" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-gray-800">
                   <Landmark size={18} className="text-[#199ce0]" />
                   Things To Do
+                </Link>
+                <Link href="/transfers" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-gray-800">
+                  <CarFront size={18} className="text-[#199ce0]" />
+                  Transfers
                 </Link>
               </div>
             </div>
