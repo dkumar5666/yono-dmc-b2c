@@ -2,8 +2,16 @@ import { NextResponse } from "next/server";
 import { searchFlights } from "@/lib/backend/flights";
 import { FlightSearchRequest } from "@/lib/backend/types";
 import { validateFlightSearchRequest } from "@/lib/backend/validation";
+import { enforceRateLimit } from "@/lib/middleware/rateLimit";
 
 export async function POST(req: Request) {
+  const rateLimitResponse = enforceRateLimit(req, {
+    key: "public:flights-search",
+    maxRequests: 80,
+    windowMs: 60_000,
+  });
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = (await req.json()) as Partial<FlightSearchRequest>;
     const payload: FlightSearchRequest = {

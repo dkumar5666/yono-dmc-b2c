@@ -1,47 +1,37 @@
-import { getCustomerSessionFromRequest } from "@/lib/backend/customerAuth";
-import { getCustomerById } from "@/lib/backend/customerStore";
-import { apiError, apiSuccess } from "@/lib/backend/http";
-import { listBookings } from "@/lib/backend/store";
-
-function normalizeEmail(input: string | null | undefined): string {
-  return (input ?? "").trim().toLowerCase();
-}
-
-function normalizePhone(input: string | null | undefined): string {
-  return (input ?? "").replace(/\D/g, "");
-}
+import { apiSuccess } from "@/lib/backend/http";
+import { SupabaseNotConfiguredError, SupabaseRestClient } from "@/lib/core/supabase-rest";
+import { requireRole } from "@/lib/middleware/requireRole";
+import { getCustomerIdByUserId } from "@/lib/middleware/verifyBookingOwnership";
+import { routeError } from "@/lib/middleware/routeError";
+import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
+  const auth = requireRole(req, ["customer", "admin"]);
+  if (auth.denied) return auth.denied;
+
   try {
-    const session = getCustomerSessionFromRequest(req);
-    if (!session) {
-      return apiError(req, 401, "UNAUTHORIZED", "Unauthorized");
+    const url = new URL(req.url);
+    let customerId = url.searchParams.get("customerId");
+
+    if (auth.role === "customer") {
+      if (!auth.userId) return routeError(401, "Not authenticated");
+      customerId = await getCustomerIdByUserId(auth.userId);
+      if (!customerId) return routeError(403, "Not authorized");
+    } else if (!customerId) {
+      return NextResponse.json({ success: false, error: "customerId is required." }, { status: 400 });
     }
 
-    const customer = getCustomerById(session.id);
-    if (!customer) {
-      return apiError(req, 401, "UNAUTHORIZED", "Unauthorized");
+    const db = new SupabaseRestClient();
+    const query = new URLSearchParams();
+    query.set("customer_id", `eq.${customerId}`);
+    query.set("select", "*");
+    query.set("order", "start_date.desc");
+    const trips = await db.selectMany<Record<string, unknown>>("trips", query);
+    return apiSuccess(req, { trips });
+  } catch (error) {
+    if (error instanceof SupabaseNotConfiguredError) {
+      return routeError(500, "Supabase is not configured.");
     }
-
-    const customerEmail = normalizeEmail(customer.email);
-    const customerPhone = normalizePhone(customer.phone);
-
-    const bookings = await listBookings();
-    const matched = bookings.filter((item) => {
-      const bookingEmail = normalizeEmail(item.contact.email);
-      const bookingPhone = normalizePhone(item.contact.phone);
-
-      const emailMatch =
-        customerEmail.length > 0 && bookingEmail.length > 0 && customerEmail === bookingEmail;
-      const phoneMatch =
-        customerPhone.length > 0 && bookingPhone.length > 0 && customerPhone === bookingPhone;
-
-      return emailMatch || phoneMatch;
-    });
-
-    return apiSuccess(req, { bookings: matched });
-  } catch {
-    return apiError(req, 500, "TRIPS_FETCH_ERROR", "Failed to fetch trips.");
+    return routeError(500, "Failed to fetch trips");
   }
 }
-

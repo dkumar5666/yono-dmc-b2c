@@ -1,14 +1,15 @@
-import { apiError, apiSuccess } from "@/lib/backend/http";
-import { requireAdmin } from "@/lib/backend/adminAuth";
+import { apiSuccess } from "@/lib/backend/http";
+import { requireRole } from "@/lib/middleware/requireRole";
 import {
   aiConversationStatuses,
   exportAIConversationsCsv,
   listAIConversations,
 } from "@/lib/backend/aiConversations";
 import { NextResponse } from "next/server";
+import { routeError } from "@/lib/middleware/routeError";
 
 export async function GET(req: Request) {
-  const authError = requireAdmin(req);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
       status !== "all" &&
       !aiConversationStatuses.includes(status as (typeof aiConversationStatuses)[number])
     ) {
-      return apiError(req, 400, "INVALID_STATUS", "Invalid status filter.");
+      return NextResponse.json({ success: false, error: "Invalid status filter." }, { status: 400 });
     }
 
     if (format === "csv") {
@@ -41,6 +42,6 @@ export async function GET(req: Request) {
     );
     return apiSuccess(req, { conversations });
   } catch {
-    return apiError(req, 500, "AI_CONVERSATIONS_LIST_ERROR", "Failed to load AI conversations.");
+    return routeError(500, "Failed to load AI conversations.");
   }
 }

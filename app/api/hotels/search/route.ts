@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { searchHotels } from "@/lib/backend/hotels";
+import { enforceRateLimit } from "@/lib/middleware/rateLimit";
 
 interface HotelSearchBody {
   cityCode?: string;
@@ -66,6 +67,13 @@ function fallbackHotels(input: {
 }
 
 export async function POST(req: Request) {
+  const rateLimitResponse = enforceRateLimit(req, {
+    key: "public:hotels-search",
+    maxRequests: 80,
+    windowMs: 60_000,
+  });
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = (await req.json()) as HotelSearchBody;
     const cityCode = (body.cityCode ?? "").trim().toUpperCase();

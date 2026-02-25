@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { requireRoles } from "@/lib/backend/adminAuth";
+﻿import { NextResponse } from "next/server";
+import { requireRole } from "@/lib/middleware/requireRole";
 import {
   deleteBlogPost,
   updateBlogPost,
@@ -12,7 +12,7 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<Params> | Params }
 ) {
-  const authError = requireRoles(req, ["admin", "editor"]);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
@@ -28,7 +28,7 @@ export async function PUT(
       message.includes("not found")
         ? 400
         : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }
 
@@ -36,7 +36,7 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<Params> | Params }
 ) {
-  const authError = requireRoles(req, ["admin", "editor"]);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
@@ -46,6 +46,7 @@ export async function DELETE(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to delete blog post";
     const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }
+

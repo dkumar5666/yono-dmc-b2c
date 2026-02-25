@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { requireRoles } from "@/lib/backend/adminAuth";
+﻿import { NextResponse } from "next/server";
+import { requireRole } from "@/lib/middleware/requireRole";
 import { deleteDestination, updateDestination, type DestinationInput } from "@/lib/backend/travelAdmin";
 
 interface RouteContext {
@@ -7,7 +7,7 @@ interface RouteContext {
 }
 
 export async function PUT(req: Request, context: RouteContext) {
-  const authError = requireRoles(req, ["admin", "editor"]);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
@@ -23,12 +23,12 @@ export async function PUT(req: Request, context: RouteContext) {
         : message.includes("not found")
           ? 404
           : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }
 
 export async function DELETE(req: Request, context: RouteContext) {
-  const authError = requireRoles(req, ["admin", "editor"]);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
@@ -38,6 +38,7 @@ export async function DELETE(req: Request, context: RouteContext) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to delete destination";
     const status = message.includes("not found") ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }
+

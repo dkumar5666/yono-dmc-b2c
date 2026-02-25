@@ -10,6 +10,9 @@ import {
   buildBookingConfirmedNotification,
   sendNotificationStub,
 } from "@/lib/backend/notifications";
+import { requireRole } from "@/lib/middleware/requireRole";
+import { verifyBookingOwnership } from "@/lib/middleware/verifyBookingOwnership";
+import { routeError } from "@/lib/middleware/routeError";
 
 interface ConfirmPaymentBody {
   bookingId?: string;
@@ -18,6 +21,9 @@ interface ConfirmPaymentBody {
 }
 
 export async function POST(req: Request) {
+  const auth = requireRole(req, ["customer", "admin"]);
+  if (auth.denied) return auth.denied;
+
   try {
     const body = (await req.json()) as ConfirmPaymentBody;
     const bookingId = body.bookingId ?? "";
@@ -26,14 +32,20 @@ export async function POST(req: Request) {
 
     if (!bookingId || !paymentIntentId) {
       return NextResponse.json(
-        { error: "bookingId and paymentIntentId are required" },
+        { success: false, error: "bookingId and paymentIntentId are required" },
         { status: 400 }
       );
     }
+    const ownershipError = await verifyBookingOwnership({
+      bookingId,
+      role: auth.role,
+      userId: auth.userId,
+    });
+    if (ownershipError) return ownershipError;
 
     const booking = await getBookingById(bookingId);
     if (!booking) {
-      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+      return routeError(404, "Booking not found");
     }
     if (booking.status === "confirmed") {
       return NextResponse.json({
@@ -43,14 +55,14 @@ export async function POST(req: Request) {
     }
     if (booking.status === "cancelled" || booking.status === "failed") {
       return NextResponse.json(
-        { error: `Cannot confirm payment for ${booking.status} booking` },
+        { success: false, error: `Cannot confirm payment for ${booking.status} booking` },
         { status: 400 }
       );
     }
 
     const paymentIntent = await getPaymentIntentById(paymentIntentId);
     if (!paymentIntent || paymentIntent.bookingId !== bookingId) {
-      return NextResponse.json({ error: "Payment intent not found" }, { status: 404 });
+      return routeError(404, "Payment intent not found");
     }
     if (paymentIntent.status === "succeeded" && booking.status === "paid") {
       return NextResponse.json({
@@ -71,6 +83,7 @@ export async function POST(req: Request) {
       const failedTransition = await transitionBookingStatus(booking.id, "failed");
       return NextResponse.json(
         {
+          success: false,
           error: "Payment failed",
           paymentIntentId,
           booking: failedTransition.booking,
@@ -94,7 +107,7 @@ export async function POST(req: Request) {
     );
     if (!paidTransition.booking) {
       return NextResponse.json(
-        { error: paidTransition.error ?? "Failed to update booking payment state" },
+        { success: false, error: paidTransition.error ?? "Failed to update booking payment state" },
         { status: 400 }
       );
     }
@@ -104,7 +117,7 @@ export async function POST(req: Request) {
     });
     if (!confirmTransition.booking) {
       return NextResponse.json(
-        { error: confirmTransition.error ?? "Failed to confirm booking" },
+        { success: false, error: confirmTransition.error ?? "Failed to confirm booking" },
         { status: 400 }
       );
     }
@@ -119,6 +132,6 @@ export async function POST(req: Request) {
     });
   } catch (error: unknown) {
     console.error("PAYMENT CONFIRM ERROR:", error);
-    return NextResponse.json({ error: "Failed to confirm payment" }, { status: 500 });
+    return routeError(500, "Failed to confirm payment");
   }
 }

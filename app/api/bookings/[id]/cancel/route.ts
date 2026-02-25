@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getBookingById, transitionBookingStatus } from "@/lib/backend/store";
-import { requireAdmin } from "@/lib/backend/adminAuth";
+import { requireRole } from "@/lib/middleware/requireRole";
+import { verifyBookingOwnership } from "@/lib/middleware/verifyBookingOwnership";
+import { routeError } from "@/lib/middleware/routeError";
 
 interface CancelBookingBody {
   reason?: string;
@@ -10,14 +12,21 @@ export async function POST(
   req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  try {
-    const authError = requireAdmin(req);
-    if (authError) return authError;
+  const auth = requireRole(req, ["customer", "admin"]);
+  if (auth.denied) return auth.denied;
 
+  try {
     const params = "then" in context.params ? await context.params : context.params;
+    const ownershipError = await verifyBookingOwnership({
+      bookingId: params.id,
+      role: auth.role,
+      userId: auth.userId,
+    });
+    if (ownershipError) return ownershipError;
+
     const booking = await getBookingById(params.id);
     if (!booking) {
-      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+      return routeError(404, "Booking not found");
     }
 
     const body = (await req.json()) as CancelBookingBody;
@@ -30,7 +39,7 @@ export async function POST(
 
     if (!transition.booking) {
       return NextResponse.json(
-        { error: transition.error ?? "Unable to cancel booking" },
+        { success: false, error: transition.error ?? "Unable to cancel booking" },
         { status: 400 }
       );
     }
@@ -41,6 +50,6 @@ export async function POST(
     });
   } catch (error: unknown) {
     console.error("BOOKING CANCEL ERROR:", error);
-    return NextResponse.json({ error: "Failed to cancel booking" }, { status: 500 });
+    return routeError(500, "Failed to cancel booking");
   }
 }

@@ -1,34 +1,36 @@
-import { apiError, apiSuccess } from "@/lib/backend/http";
-import { requireAdmin } from "@/lib/backend/adminAuth";
+import { apiSuccess } from "@/lib/backend/http";
+import { requireRole } from "@/lib/middleware/requireRole";
 import {
   AIConversationStatus,
   aiConversationStatuses,
   getAIConversationById,
   updateAIConversation,
 } from "@/lib/backend/aiConversations";
+import { routeError } from "@/lib/middleware/routeError";
+import { NextResponse } from "next/server";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 export async function GET(req: Request, ctx: RouteParams) {
-  const authError = requireAdmin(req);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
     const { id } = await ctx.params;
     const conversation = getAIConversationById(id);
     if (!conversation) {
-      return apiError(req, 404, "AI_CONVERSATION_NOT_FOUND", "Conversation not found.");
+      return routeError(404, "Conversation not found");
     }
     return apiSuccess(req, { conversation });
   } catch {
-    return apiError(req, 500, "AI_CONVERSATION_FETCH_ERROR", "Failed to load conversation.");
+    return routeError(500, "Failed to load conversation");
   }
 }
 
 export async function PATCH(req: Request, ctx: RouteParams) {
-  const authError = requireAdmin(req);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
@@ -43,7 +45,7 @@ export async function PATCH(req: Request, ctx: RouteParams) {
       body.status &&
       !aiConversationStatuses.includes(body.status as AIConversationStatus)
     ) {
-      return apiError(req, 400, "INVALID_STATUS", "Invalid status value.");
+      return NextResponse.json({ success: false, error: "Invalid status value." }, { status: 400 });
     }
 
     const updated = updateAIConversation(id, {
@@ -52,15 +54,15 @@ export async function PATCH(req: Request, ctx: RouteParams) {
       assigned_to: body.assigned_to,
     });
     if (!updated) {
-      return apiError(req, 404, "AI_CONVERSATION_NOT_FOUND", "Conversation not found.");
+      return routeError(404, "Conversation not found");
     }
     return apiSuccess(req, { conversation: updated });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to update conversation.";
     if (message === "Conversation not found") {
-      return apiError(req, 404, "AI_CONVERSATION_NOT_FOUND", message);
+      return routeError(404, "Conversation not found");
     }
-    return apiError(req, 500, "AI_CONVERSATION_UPDATE_ERROR", message);
+    return routeError(500, message);
   }
 }

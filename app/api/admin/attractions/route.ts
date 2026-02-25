@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { requireRoles } from "@/lib/backend/adminAuth";
+﻿import { NextResponse } from "next/server";
+import { requireRole } from "@/lib/middleware/requireRole";
 import { saveAttractionsCatalog, getAttractionsCatalog } from "@/lib/backend/attractionsStore";
 import { TicketedAttraction } from "@/data/ticketedAttractions";
 
@@ -8,7 +8,7 @@ interface AttractionsBody {
 }
 
 export async function GET(req: Request) {
-  const authError = requireRoles(req, ["admin", "editor"]);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
@@ -16,19 +16,19 @@ export async function GET(req: Request) {
     return NextResponse.json(catalog);
   } catch (error: unknown) {
     console.error("ADMIN ATTRACTIONS GET ERROR:", error);
-    return NextResponse.json({ error: "Failed to load attractions" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to load attractions" }, { status: 500 });
   }
 }
 
 export async function PUT(req: Request) {
-  const authError = requireRoles(req, ["admin", "editor"]);
+  const authError = requireRole(req, "admin").denied;
   if (authError) return authError;
 
   try {
     const body = (await req.json()) as AttractionsBody;
     if (!Array.isArray(body.attractions)) {
       return NextResponse.json(
-        { error: "attractions array is required" },
+        { success: false, error: "attractions array is required" },
         { status: 400 }
       );
     }
@@ -39,6 +39,7 @@ export async function PUT(req: Request) {
     return NextResponse.json(saved);
   } catch (error: unknown) {
     console.error("ADMIN ATTRACTIONS PUT ERROR:", error);
-    return NextResponse.json({ error: "Failed to save attractions" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to save attractions" }, { status: 500 });
   }
 }
+

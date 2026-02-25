@@ -5,22 +5,34 @@ import {
   transitionBookingStatus,
   updateBookingFields,
 } from "@/lib/backend/store";
-import { requireAdmin } from "@/lib/backend/adminAuth";
+import { requireRole } from "@/lib/middleware/requireRole";
+import { verifyBookingOwnership } from "@/lib/middleware/verifyBookingOwnership";
+import { routeError } from "@/lib/middleware/routeError";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
+  const auth = requireRole(req, ["customer", "admin"]);
+  if (auth.denied) return auth.denied;
+
   try {
     const params = "then" in context.params ? await context.params : context.params;
+    const ownershipError = await verifyBookingOwnership({
+      bookingId: params.id,
+      role: auth.role,
+      userId: auth.userId,
+    });
+    if (ownershipError) return ownershipError;
+
     const booking = await getBookingById(params.id);
     if (!booking) {
-      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+      return routeError(404, "Booking not found");
     }
     return NextResponse.json({ booking });
   } catch (error: unknown) {
     console.error("BOOKING FETCH ERROR:", error);
-    return NextResponse.json({ error: "Failed to fetch booking" }, { status: 500 });
+    return routeError(500, "Failed to fetch booking");
   }
 }
 
@@ -47,14 +59,22 @@ export async function PATCH(
   req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  try {
-    const authError = requireAdmin(req);
-    if (authError) return authError;
+  const auth = requireRole(req, ["customer", "admin"]);
+  if (auth.denied) return auth.denied;
 
+  try {
     const params = "then" in context.params ? await context.params : context.params;
+    const ownershipError = await verifyBookingOwnership({
+      bookingId: params.id,
+      role: auth.role,
+      userId: auth.userId,
+    });
+    if (ownershipError) return ownershipError;
+    if (auth.role === "customer") return routeError(403, "Not authorized");
+
     const booking = await getBookingById(params.id);
     if (!booking) {
-      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+      return routeError(404, "Booking not found");
     }
 
     const body = (await req.json()) as BookingPatchBody;
@@ -62,7 +82,7 @@ export async function PATCH(
       body;
 
     if (status && !bookingStatuses.includes(status)) {
-      return NextResponse.json({ error: "Invalid booking status" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Invalid booking status" }, { status: 400 });
     }
 
     if (status) {
@@ -81,7 +101,7 @@ export async function PATCH(
 
       if (!transition.booking) {
         return NextResponse.json(
-          { error: transition.error ?? "Status update failed" },
+          { success: false, error: transition.error ?? "Status update failed" },
           { status: 400 }
         );
       }
@@ -101,6 +121,6 @@ export async function PATCH(
     return NextResponse.json({ booking: updated });
   } catch (error: unknown) {
     console.error("BOOKING PATCH ERROR:", error);
-    return NextResponse.json({ error: "Failed to update booking" }, { status: 500 });
+    return routeError(500, "Failed to update booking");
   }
 }
