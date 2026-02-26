@@ -72,6 +72,12 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     shortLabel: "Support",
     icon: LifeBuoy,
   },
+  {
+    href: "/admin/system/health",
+    label: "System Health",
+    shortLabel: "System Health",
+    icon: Activity,
+  },
   { href: "/admin/catalog", label: "Catalog", shortLabel: "Catalog", icon: LayoutDashboard },
   {
     href: "/admin/destinations",

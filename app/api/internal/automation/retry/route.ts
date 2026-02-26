@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { SupabaseNotConfiguredError, SupabaseRestClient } from "@/lib/core/supabase-rest";
 import { routeError } from "@/lib/middleware/routeError";
+import { writeHeartbeat } from "@/lib/system/heartbeat";
 
 interface AutomationFailureRow {
   id?: string | null;
@@ -147,6 +148,7 @@ async function handle(req: Request) {
 
   try {
     const summary = await processRetries();
+    await writeHeartbeat("cron_retry", summary);
     return NextResponse.json(summary);
   } catch (error) {
     if (error instanceof SupabaseNotConfiguredError) {
