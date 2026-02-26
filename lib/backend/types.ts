@@ -93,6 +93,7 @@ export interface BookingRecord {
   offerSnapshot: unknown;
   paymentIntentId?: string;
   providerPaymentId?: string;
+  amadeusOrderId?: string;
   pnr?: string;
   ticketNumbers?: string[];
   issuedAt?: string;

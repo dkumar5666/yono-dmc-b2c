@@ -54,6 +54,14 @@ type PaymentIntent = {
   status: string;
 };
 
+type SupplierFlightBookingResult = {
+  supplier: "amadeus";
+  skipped?: boolean;
+  reason?: string;
+  amadeus_order_id?: string;
+  pnr?: string;
+};
+
 const initialSearch = {
   from: "DEL",
   to: "DXB",
@@ -80,6 +88,43 @@ function formatDuration(value: string): string {
   if (hours === 0) return `${minutes}m`;
   if (minutes === 0) return `${hours}h`;
   return `${hours}h ${minutes}m`;
+}
+
+function buildFlightBookingTravelersPayload(input: {
+  traveler: { firstName: string; lastName: string };
+  contact: { email: string; phone: string };
+}): Array<Record<string, unknown>> {
+  const firstName = input.traveler.firstName.trim().toUpperCase();
+  const lastName = input.traveler.lastName.trim().toUpperCase();
+  const email = input.contact.email.trim();
+  const phoneDigits = input.contact.phone.replace(/[^\d]/g, "");
+
+  const payload: Record<string, unknown> = {
+    id: "1",
+    travelerType: "ADULT",
+    name: {
+      firstName: firstName || "GUEST",
+      lastName: lastName || "TRAVELER",
+    },
+  };
+
+  if (email || phoneDigits) {
+    payload.contact = {
+      ...(email ? { emailAddress: email } : {}),
+      ...(phoneDigits
+        ? {
+            phones: [
+              {
+                deviceType: "MOBILE",
+                number: phoneDigits,
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  return [payload];
 }
 
 function FlightsPageContent() {
@@ -110,9 +155,11 @@ function FlightsPageContent() {
   const [booking, setBooking] = useState<BookingRecord | null>(null);
   const [paymentIntent, setPaymentIntent] = useState<PaymentIntent | null>(null);
   const [providerPaymentId, setProviderPaymentId] = useState("");
+  const [supplierBookingResult, setSupplierBookingResult] =
+    useState<SupplierFlightBookingResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyStep, setBusyStep] = useState<
-    "search" | "book" | "intent" | "confirm" | null
+    "search" | "book" | "intent" | "confirm" | "supplier" | null
   >(null);
 
   const canCreateBooking = useMemo(() => {
@@ -172,6 +219,7 @@ function FlightsPageContent() {
     setBusyStep("search");
     setBooking(null);
     setPaymentIntent(null);
+    setSupplierBookingResult(null);
 
     try {
       const response = await fetch("/api/flights/search", {
@@ -244,6 +292,7 @@ function FlightsPageContent() {
     if (!selectedOffer || !canCreateBooking) return;
     setError(null);
     setBusyStep("book");
+    setSupplierBookingResult(null);
 
     try {
       const response = await fetch("/api/bookings", {
@@ -283,6 +332,7 @@ function FlightsPageContent() {
     if (!booking) return;
     setError(null);
     setBusyStep("intent");
+    setSupplierBookingResult(null);
 
     try {
       const response = await fetch("/api/payments/intent", {
@@ -314,6 +364,7 @@ function FlightsPageContent() {
   async function handleConfirmPayment() {
     if (!booking || !paymentIntent) return;
     setError(null);
+    setSupplierBookingResult(null);
     setBusyStep("confirm");
 
     try {
@@ -337,6 +388,55 @@ function FlightsPageContent() {
       }
 
       setBooking(data.booking);
+
+      if (!selectedOffer || !selectedOffer.raw || typeof selectedOffer.raw !== "object") {
+        setError(
+          "Payment confirmed, but supplier booking was skipped because flight offer data is unavailable."
+        );
+        return;
+      }
+
+      setBusyStep("supplier");
+
+      try {
+        const supplierResponse = await fetch("/api/flights/book", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            booking_id: data.booking.id,
+            offer: selectedOffer.raw,
+            travelers: buildFlightBookingTravelersPayload({ traveler, contact }),
+          }),
+        });
+
+        const supplierData = (await supplierResponse.json()) as {
+          ok?: boolean;
+          error?: string;
+          supplier?: "amadeus";
+          skipped?: boolean;
+          reason?: string;
+          amadeus_order_id?: string;
+          pnr?: string;
+        };
+
+        if (!supplierResponse.ok || !supplierData.ok) {
+          throw new Error(supplierData.error ?? "Flight supplier booking failed");
+        }
+
+        setSupplierBookingResult({
+          supplier: "amadeus",
+          skipped: supplierData.skipped,
+          reason: supplierData.reason,
+          amadeus_order_id: supplierData.amadeus_order_id,
+          pnr: supplierData.pnr,
+        });
+      } catch (supplierError) {
+        const supplierMessage =
+          supplierError instanceof Error
+            ? supplierError.message
+            : "Flight supplier booking failed";
+        setError(`Payment confirmed, but supplier booking failed: ${supplierMessage}`);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Payment confirmation failed";
@@ -713,10 +813,12 @@ function FlightsPageContent() {
                         disabled={busyStep !== null || booking.status === "confirmed"}
                         className="inline-flex items-center gap-2 h-11 rounded-xl bg-green-600 text-white px-5 text-sm font-semibold disabled:opacity-60"
                       >
-                        {busyStep === "confirm" ? (
+                        {busyStep === "confirm" || busyStep === "supplier" ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : null}
-                        Confirm Payment & Booking
+                        {busyStep === "supplier"
+                          ? "Finalizing Supplier Booking..."
+                          : "Confirm Payment & Booking"}
                       </button>
                     </div>
                   )}
@@ -729,6 +831,53 @@ function FlightsPageContent() {
                         <p className="text-xs text-green-700">
                           Reference: {booking.reference}. Ticketing and customer notification can
                           proceed.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {supplierBookingResult ? (
+                    <div
+                      className={`rounded-lg border p-3 flex gap-2 ${
+                        supplierBookingResult.skipped
+                          ? "bg-amber-50 border-amber-200"
+                          : "bg-blue-50 border-blue-200"
+                      }`}
+                    >
+                      <CheckCircle2
+                        className={`w-4 h-4 mt-0.5 ${
+                          supplierBookingResult.skipped
+                            ? "text-amber-600"
+                            : "text-blue-600"
+                        }`}
+                      />
+                      <div className="text-sm">
+                        <p
+                          className={`font-semibold ${
+                            supplierBookingResult.skipped
+                              ? "text-amber-700"
+                              : "text-blue-700"
+                          }`}
+                        >
+                          {supplierBookingResult.skipped
+                            ? "Supplier booking already processed"
+                            : "Supplier booking created (Amadeus)"}
+                        </p>
+                        <p
+                          className={`text-xs mt-1 ${
+                            supplierBookingResult.skipped
+                              ? "text-amber-700"
+                              : "text-blue-700"
+                          }`}
+                        >
+                          {supplierBookingResult.amadeus_order_id
+                            ? `Order ID: ${supplierBookingResult.amadeus_order_id}. `
+                            : ""}
+                          {supplierBookingResult.pnr
+                            ? `PNR: ${supplierBookingResult.pnr}.`
+                            : supplierBookingResult.skipped
+                              ? "No duplicate supplier booking call was made."
+                              : "Order created. Ticketing can be completed in the next step."}
                         </p>
                       </div>
                     </div>
