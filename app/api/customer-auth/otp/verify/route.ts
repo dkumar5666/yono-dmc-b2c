@@ -6,6 +6,7 @@ import { upsertCustomer } from "@/lib/backend/customerStore";
 import { apiError, apiSuccess } from "@/lib/backend/http";
 import { logError } from "@/lib/backend/logger";
 import { consumeRateLimit, getClientIp } from "@/lib/backend/rateLimit";
+import { getTwilioVerifyConfig } from "@/lib/backend/twilioVerifyConfig";
 import {
   checkOtpVerifyAllowed,
   markOtpVerifyFailure,
@@ -48,18 +49,11 @@ export async function POST(req: Request) {
       return response;
     }
 
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
-
-    if (!accountSid || !authToken || !verifyServiceSid) {
-      return apiError(
-        req,
-        500,
-        "TWILIO_ENV_MISSING",
-        "Twilio Verify environment variables are missing."
-      );
+    const twilioConfig = getTwilioVerifyConfig();
+    if (!twilioConfig.ok) {
+      return apiError(req, 500, twilioConfig.error.code, twilioConfig.error.message);
     }
+    const { accountSid, authToken, verifyServiceSid } = twilioConfig.value;
 
     const body = (await req.json()) as VerifyOtpBody;
     const to = normalizeMobile(body.mobile ?? "");
@@ -171,6 +165,8 @@ export async function POST(req: Request) {
     return response;
   } catch (error) {
     logError("OTP VERIFY ERROR", { error });
-    return apiError(req, 500, "OTP_VERIFY_ERROR", "Failed to verify OTP.");
+    return apiError(req, 500, "OTP_VERIFY_ERROR", "Failed to verify OTP.", {
+      reason: error instanceof Error ? error.message : "unknown_error",
+    });
   }
 }

@@ -2,6 +2,7 @@ import { apiError, apiSuccess } from "@/lib/backend/http";
 import { logError } from "@/lib/backend/logger";
 import { checkOtpSendAllowed, markOtpSent } from "@/lib/backend/otpGuard";
 import { consumeRateLimit, getClientIp } from "@/lib/backend/rateLimit";
+import { getTwilioVerifyConfig } from "@/lib/backend/twilioVerifyConfig";
 
 const TWILIO_VERIFY_API_BASE = "https://verify.twilio.com/v2";
 
@@ -33,18 +34,11 @@ export async function POST(req: Request) {
       return response;
     }
 
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
-
-    if (!accountSid || !authToken || !verifyServiceSid) {
-      return apiError(
-        req,
-        500,
-        "TWILIO_ENV_MISSING",
-        "Twilio Verify environment variables are missing."
-      );
+    const twilioConfig = getTwilioVerifyConfig();
+    if (!twilioConfig.ok) {
+      return apiError(req, 500, twilioConfig.error.code, twilioConfig.error.message);
     }
+    const { accountSid, authToken, verifyServiceSid } = twilioConfig.value;
 
     const body = (await req.json()) as SendOtpBody;
     const to = normalizeMobile(body.mobile ?? "");
@@ -119,6 +113,8 @@ export async function POST(req: Request) {
     return apiSuccess(req, { sent: true, cooldownSeconds: 45 });
   } catch (error) {
     logError("OTP SEND ERROR", { error });
-    return apiError(req, 500, "OTP_SEND_ERROR", "Failed to send OTP.");
+    return apiError(req, 500, "OTP_SEND_ERROR", "Failed to send OTP.", {
+      reason: error instanceof Error ? error.message : "unknown_error",
+    });
   }
 }
