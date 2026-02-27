@@ -10,9 +10,16 @@ interface CustomerSessionPayload {
   exp: number;
 }
 
+interface OtpChallengePayload {
+  phone: string;
+  challengeId: string;
+  exp: number;
+}
+
 export const CUSTOMER_AUTH_COOKIE_NAME = "yono_customer_session";
-const GOOGLE_STATE_COOKIE_NAME = "yono_google_oauth_state";
-const GOOGLE_NEXT_PATH_COOKIE_NAME = "yono_google_oauth_next";
+export const GOOGLE_STATE_COOKIE_NAME = "yono_google_oauth_state";
+export const GOOGLE_NEXT_PATH_COOKIE_NAME = "yono_google_oauth_next";
+export const OTP_CHALLENGE_COOKIE_NAME = "yono_otp_challenge";
 
 function base64UrlEncode(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");
@@ -168,6 +175,60 @@ export function readGoogleNextPathFromRequest(req: Request): string {
 
 export function clearGoogleNextPathCookie(response: NextResponse): void {
   response.cookies.set(GOOGLE_NEXT_PATH_COOKIE_NAME, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+function createOtpChallengeToken(payload: OtpChallengePayload): string {
+  const encoded = base64UrlEncode(JSON.stringify(payload));
+  const signature = sign(encoded);
+  return `${encoded}.${signature}`;
+}
+
+function verifyOtpChallengeToken(token: string): OtpChallengePayload | null {
+  const [encoded, signature] = token.split(".");
+  if (!encoded || !signature) return null;
+  if (sign(encoded) !== signature) return null;
+  try {
+    const payload = JSON.parse(base64UrlDecode(encoded)) as OtpChallengePayload;
+    if (!payload.phone || !payload.challengeId || !payload.exp) return null;
+    if (payload.exp < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export function applyOtpChallengeCookie(
+  response: NextResponse,
+  input: { phone: string; challengeId: string }
+): void {
+  const token = createOtpChallengeToken({
+    phone: input.phone,
+    challengeId: input.challengeId,
+    exp: Date.now() + 1000 * 60 * 10,
+  });
+  response.cookies.set(OTP_CHALLENGE_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 10,
+  });
+}
+
+export function readOtpChallengeFromRequest(req: Request): OtpChallengePayload | null {
+  const token = parseCookieHeader(req, OTP_CHALLENGE_COOKIE_NAME);
+  if (!token) return null;
+  return verifyOtpChallengeToken(token);
+}
+
+export function clearOtpChallengeCookie(response: NextResponse): void {
+  response.cookies.set(OTP_CHALLENGE_COOKIE_NAME, "", {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

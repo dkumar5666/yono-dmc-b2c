@@ -8,13 +8,34 @@ import {
 import { getPublicBaseUrl } from "@/lib/auth/baseUrl";
 import { apiError } from "@/lib/backend/http";
 import { consumeRateLimit, getClientIp } from "@/lib/backend/rateLimit";
+import { getRequestId, safeLog } from "@/lib/system/requestContext";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 export async function GET(req: Request) {
+  const requestId = getRequestId(req);
+  safeLog(
+    "auth.google.start.requested",
+    {
+      requestId,
+      route: "/api/customer-auth/google/start",
+    },
+    req
+  );
+
   const ip = getClientIp(req);
   const limit = consumeRateLimit(`google-oauth-start:${ip}`, 30, 15 * 60 * 1000);
   if (!limit.ok) {
+    safeLog(
+      "auth.google.start.failed",
+      {
+        requestId,
+        route: "/api/customer-auth/google/start",
+        outcome: "fail",
+        reason: "rate_limited",
+      },
+      req
+    );
     const response = apiError(
       req,
       429,
@@ -35,6 +56,18 @@ export async function GET(req: Request) {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) {
+    safeLog(
+      "auth.google.start.failed",
+      {
+        requestId,
+        route: "/api/customer-auth/google/start",
+        outcome: "fail",
+        reason: "google_env_missing",
+        hasGoogleClientId: Boolean(clientId),
+        hasGoogleClientSecret: Boolean(clientSecret),
+      },
+      req
+    );
     return apiError(
       req,
       500,
@@ -70,7 +103,18 @@ export async function GET(req: Request) {
   authUrl.searchParams.set("prompt", "select_account");
 
   const response = NextResponse.redirect(authUrl);
+  response.headers.set("x-request-id", requestId);
   applyGoogleStateCookie(response, state);
   applyGoogleNextPathCookie(response, nextPath);
+  safeLog(
+    "auth.google.start.success",
+    {
+      requestId,
+      route: "/api/customer-auth/google/start",
+      outcome: "success",
+      hasNextPath: Boolean(requestedNextPath),
+    },
+    req
+  );
   return response;
 }

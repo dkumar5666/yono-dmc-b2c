@@ -14,6 +14,7 @@ import {
   Newspaper,
   PackagePlus,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 
 export interface AdminNavItem {
@@ -77,6 +78,12 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     label: "System Health",
     shortLabel: "System Health",
     icon: Activity,
+  },
+  {
+    href: "/admin/auth/diagnostics",
+    label: "Auth Diagnostics",
+    shortLabel: "Auth",
+    icon: ShieldCheck,
   },
   {
     href: "/admin/webhooks/events",

@@ -10,6 +10,7 @@ import {
 } from "@/lib/backend/customerAuth";
 import { getPublicBaseUrl } from "@/lib/auth/baseUrl";
 import { upsertCustomer } from "@/lib/backend/customerStore";
+import { getRequestId, safeLog } from "@/lib/system/requestContext";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
@@ -26,10 +27,11 @@ interface GoogleUserInfo {
   email?: string;
 }
 
-function loginErrorRedirect(baseUrl: string, code: string): NextResponse {
+function loginErrorRedirect(baseUrl: string, code: string, requestId: string): NextResponse {
   const response = NextResponse.redirect(
-    `${baseUrl}/login?error=${encodeURIComponent(code)}`
+    `${baseUrl}/login?error=${encodeURIComponent(code)}&rid=${encodeURIComponent(requestId)}`
   );
+  response.headers.set("x-request-id", requestId);
   clearGoogleStateCookie(response);
   clearGoogleNextPathCookie(response);
   return response;
@@ -44,26 +46,68 @@ async function parseJsonSafe<T>(res: Response): Promise<T | null> {
 }
 
 export async function GET(req: Request) {
+  const requestId = getRequestId(req);
   try {
     const url = new URL(req.url);
     const baseUrl = getPublicBaseUrl(req);
     const nextPathRaw = readGoogleNextPathFromRequest(req);
     const nextPath = nextPathRaw === "/" ? "/my-trips" : sanitizeNextPath(nextPathRaw);
     const providerError = url.searchParams.get("error");
+    safeLog(
+      "auth.google.callback.requested",
+      {
+        requestId,
+        route: "/api/customer-auth/google/callback",
+        hasCodeParam: Boolean(url.searchParams.get("code")),
+        hasStateParam: Boolean(url.searchParams.get("state")),
+        hasProviderErrorParam: Boolean(providerError),
+      },
+      req
+    );
 
     if (providerError) {
-      return loginErrorRedirect(baseUrl, "google_provider_error");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_provider_error",
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_provider_error", requestId);
     }
 
     const code = url.searchParams.get("code");
     if (!code) {
-      return loginErrorRedirect(baseUrl, "google_missing_code");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_missing_code",
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_missing_code", requestId);
     }
 
     const state = url.searchParams.get("state");
     const expectedState = readGoogleStateFromRequest(req);
     if (!state || !expectedState || state !== expectedState) {
-      return loginErrorRedirect(baseUrl, "google_state_mismatch");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_state_mismatch",
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_state_mismatch", requestId);
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
@@ -73,7 +117,19 @@ export async function GET(req: Request) {
         hasClientId: Boolean(clientId),
         hasClientSecret: Boolean(clientSecret),
       });
-      return loginErrorRedirect(baseUrl, "google_oauth_not_configured");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_oauth_not_configured",
+          hasGoogleClientId: Boolean(clientId),
+          hasGoogleClientSecret: Boolean(clientSecret),
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_oauth_not_configured", requestId);
     }
 
     const hasSessionSecret = Boolean(
@@ -85,7 +141,17 @@ export async function GET(req: Request) {
         hasAuthSessionSecret: Boolean(process.env.AUTH_SESSION_SECRET?.trim()),
         hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET?.trim()),
       });
-      return loginErrorRedirect(baseUrl, "google_oauth_not_configured");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "session_secret_missing",
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_oauth_not_configured", requestId);
     }
 
     const redirectUri = `${baseUrl}/api/customer-auth/google/callback`;
@@ -113,12 +179,34 @@ export async function GET(req: Request) {
           hasBody: Boolean(tokenErrorText),
         });
       }
-      return loginErrorRedirect(baseUrl, "google_token_exchange_failed");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_token_exchange_failed",
+          tokenHttpStatus: tokenRes.status,
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_token_exchange_failed", requestId);
     }
 
     const tokenJson = await parseJsonSafe<GoogleTokenResponse>(tokenRes);
     if (!tokenJson?.access_token) {
-      return loginErrorRedirect(baseUrl, "google_token_exchange_failed");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_token_exchange_failed",
+          missingAccessToken: true,
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_token_exchange_failed", requestId);
     }
 
     const userRes = await fetch(GOOGLE_USERINFO_URL, {
@@ -127,15 +215,46 @@ export async function GET(req: Request) {
     });
 
     if (!userRes.ok) {
-      return loginErrorRedirect(baseUrl, "google_userinfo_failed");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_userinfo_failed",
+          userInfoHttpStatus: userRes.status,
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_userinfo_failed", requestId);
     }
 
     const user = await parseJsonSafe<GoogleUserInfo>(userRes);
     if (!user?.sub || !user.name) {
-      return loginErrorRedirect(baseUrl, "google_profile_missing");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_profile_missing",
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_profile_missing", requestId);
     }
     if (!user.email) {
-      return loginErrorRedirect(baseUrl, "google_email_missing");
+      safeLog(
+        "auth.google.callback.failed",
+        {
+          requestId,
+          route: "/api/customer-auth/google/callback",
+          outcome: "fail",
+          reason: "google_email_missing",
+        },
+        req
+      );
+      return loginErrorRedirect(baseUrl, "google_email_missing", requestId);
     }
 
     const customer = upsertCustomer({
@@ -154,9 +273,19 @@ export async function GET(req: Request) {
     });
 
     const response = NextResponse.redirect(`${baseUrl}${nextPath}`);
+    response.headers.set("x-request-id", requestId);
     applyCustomerSessionCookie(response, token);
     clearGoogleStateCookie(response);
     clearGoogleNextPathCookie(response);
+    safeLog(
+      "auth.google.callback.success",
+      {
+        requestId,
+        route: "/api/customer-auth/google/callback",
+        outcome: "success",
+      },
+      req
+    );
     return response;
   } catch (error) {
     const url = new URL(req.url);
@@ -176,7 +305,20 @@ export async function GET(req: Request) {
       path: url.pathname,
     });
 
+    safeLog(
+      "auth.google.callback.failed",
+      {
+        requestId,
+        route: "/api/customer-auth/google/callback",
+        outcome: "fail",
+        reason: "google_auth_failed",
+        message: error instanceof Error ? error.message : "unknown_error",
+        name: error instanceof Error ? error.name : "unknown_error",
+      },
+      req
+    );
+
     const baseUrl = getPublicBaseUrl(req);
-    return loginErrorRedirect(baseUrl, "google_auth_failed");
+    return loginErrorRedirect(baseUrl, "google_auth_failed", requestId);
   }
 }
