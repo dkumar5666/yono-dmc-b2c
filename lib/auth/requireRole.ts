@@ -26,7 +26,7 @@ export async function requireRole(required: IdentityRole | IdentityRole[], nextP
 
   if (!identity) {
     const encodedNext = encodeURIComponent(nextPath || "/");
-    if (allowed.includes("admin")) redirect(`/admin-login?next=${encodedNext}`);
+    if (allowed.includes("admin")) redirect(`/admin/login?next=${encodedNext}`);
     if (allowed.includes("agent")) redirect(`/agent/login?next=${encodedNext}`);
     if (allowed.includes("supplier")) redirect(`/supplier/login?next=${encodedNext}`);
     redirect(`/login?next=${encodedNext}`);
@@ -34,7 +34,7 @@ export async function requireRole(required: IdentityRole | IdentityRole[], nextP
 
   const role = identity.role;
   if (!role || !allowed.includes(role)) {
-    if (allowed.includes("admin")) redirect("/admin-login");
+    if (allowed.includes("admin")) redirect("/admin/login");
     if (allowed.includes("agent")) redirect("/agent/login");
     if (allowed.includes("supplier")) redirect("/supplier/login");
     redirect("/");

@@ -37,9 +37,9 @@ function formatDateTime(value?: string | null): string {
 }
 
 function formatTime(value?: string | null): string {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -182,6 +182,7 @@ export default function AdminSystemHealthPage() {
 
   const cronStale = useMemo(() => isStale(data.lastCronRetryAt, 15), [data.lastCronRetryAt]);
   const webhookStale = useMemo(() => isStale(data.lastPaymentWebhookAt, 60), [data.lastPaymentWebhookAt]);
+  const hardFail = cronStale === true || webhookStale === true;
 
   return (
     <div className="space-y-6">
@@ -230,6 +231,27 @@ export default function AdminSystemHealthPage() {
               <RefreshCw className="h-4 w-4" />
               Retry
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {hardFail ? (
+        <div className="rounded-2xl border border-rose-300 bg-rose-100 p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-300 bg-white text-rose-600">
+              <ShieldAlert className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-rose-900">System Health Hard Fail</p>
+              <p className="mt-1 text-sm text-rose-800">
+                {cronStale === true && webhookStale === true
+                  ? "Cron retry and payment webhook heartbeats are stale."
+                  : cronStale === true
+                    ? "Cron retry heartbeat is stale."
+                    : "Payment webhook heartbeat is stale."}{" "}
+                Check scheduler and webhook delivery immediately.
+              </p>
+            </div>
           </div>
         </div>
       ) : null}

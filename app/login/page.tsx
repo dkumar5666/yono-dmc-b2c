@@ -276,7 +276,7 @@ function LoginContent() {
             <Link href="/agent/login" className="block font-semibold text-[#199ce0]">
               B2B Agent Login
             </Link>
-            <Link href="/admin-login" className="block font-semibold text-[#199ce0]">
+            <Link href="/admin/login" className="block font-semibold text-[#199ce0]">
               Office Admin Login
             </Link>
           </div>

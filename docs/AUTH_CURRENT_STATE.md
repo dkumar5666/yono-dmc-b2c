@@ -40,7 +40,7 @@ Last updated: 2026-02-27
 |---|---|
 | `/login` | Unified sign in (Google + mobile OTP + office/supplier email login) |
 | `/signup` | B2C/B2B signup (Customer/Agent) using Google or OTP |
-| `/admin-login` | Official office admin login (Supabase email/password, optional Google start) |
+| `/admin/login` | Official office admin login (Supabase email/password, optional Google start) |
 | `/supplier/login` | Supplier login (Supabase email/password) |
 
 ## 3) Cookies currently in use

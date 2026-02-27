@@ -37,7 +37,7 @@ Last updated: 2026-02-27
 |---|---|
 | `/login` | Unified sign-in: Google, OTP, email/password |
 | `/signup` | Unified sign-up: customer or agent |
-| `/admin-login` | Office/admin login |
+| `/admin/login` | Office/admin login |
 | `/supplier/login` | Supplier login |
 
 ## Cookie names in active flow

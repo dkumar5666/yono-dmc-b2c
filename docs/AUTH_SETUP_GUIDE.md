@@ -97,7 +97,7 @@ Set these on Vercel project (Production + Preview + Development as needed):
 - Create admin user in Supabase Auth.
 - In DB, set:
   - `profiles.role = 'admin'`
-- Admin logs in at `/admin-login`.
+- Admin logs in at `/admin/login`.
 
 ## 7) End-to-end verification checklist
 
@@ -119,7 +119,7 @@ Set these on Vercel project (Production + Preview + Development as needed):
    - `agent_profiles` row created
 
 4. Admin login:
-   - `/admin-login`
+   - `/admin/login`
    - successful login redirects `/admin/control-center`
 
 5. Supplier login:

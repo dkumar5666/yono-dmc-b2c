@@ -71,9 +71,9 @@ function formatCurrency(value: number): string {
 }
 
 function formatDateTime(value?: string | null): string {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -84,9 +84,9 @@ function formatDateTime(value?: string | null): string {
 }
 
 function formatTime(value?: string | null): string {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -503,8 +503,8 @@ export default function AdminControlCenterPage() {
               <tbody>
                 {sortedRecent.map((booking, index) => (
                   <tr key={`${booking.booking_id ?? "booking"}-${index}`} className="border-b border-slate-100">
-                    <td className="px-3 py-3 font-medium text-slate-900">{booking.booking_id?.trim() || "—"}</td>
-                    <td className="px-3 py-3 text-slate-600">{booking.customer_name?.trim() || "—"}</td>
+                    <td className="px-3 py-3 font-medium text-slate-900">{booking.booking_id?.trim() || "-"}</td>
+                    <td className="px-3 py-3 text-slate-600">{booking.customer_name?.trim() || "-"}</td>
                     <td className="px-3 py-3">
                       <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium capitalize text-slate-700">
                         {(booking.status?.replaceAll("_", " ") || "unknown").trim()}
@@ -523,7 +523,7 @@ export default function AdminControlCenterPage() {
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-800">
             <Info className="h-4 w-4 text-slate-500" />
-            Dev Debug — Day Window
+            Dev Debug - Day Window
           </div>
           <pre className="overflow-x-auto rounded-xl bg-slate-900 p-3 text-xs text-slate-100">
             {JSON.stringify(data.dayWindow, null, 2)}
@@ -533,3 +533,4 @@ export default function AdminControlCenterPage() {
     </div>
   );
 }
+
