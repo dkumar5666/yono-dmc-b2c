@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-export type AuthRole = "admin" | "customer" | "supplier";
+export type AuthRole = "admin" | "customer" | "supplier" | "agent";
 
 export interface JwtRoleContext {
   token: string;
@@ -41,19 +41,19 @@ function verifyHs256(token: string, secret: string): boolean {
 
 function extractRole(claims: Record<string, unknown>): AuthRole | null {
   const direct = claims.role;
-  if (direct === "admin" || direct === "customer" || direct === "supplier") {
+  if (direct === "admin" || direct === "customer" || direct === "supplier" || direct === "agent") {
     return direct;
   }
 
   const userRole = claims.user_role;
-  if (userRole === "admin" || userRole === "customer" || userRole === "supplier") {
+  if (userRole === "admin" || userRole === "customer" || userRole === "supplier" || userRole === "agent") {
     return userRole;
   }
 
   const appMetadata = claims.app_metadata;
   if (appMetadata && typeof appMetadata === "object") {
     const role = (appMetadata as Record<string, unknown>).role;
-    if (role === "admin" || role === "customer" || role === "supplier") {
+    if (role === "admin" || role === "customer" || role === "supplier" || role === "agent") {
       return role;
     }
   }

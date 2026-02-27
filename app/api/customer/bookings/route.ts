@@ -6,7 +6,7 @@ import { routeError } from "@/lib/middleware/routeError";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
-  const auth = requireRole(req, ["customer", "admin"]);
+  const auth = requireRole(req, ["customer", "agent", "admin"]);
   if (auth.denied) return auth.denied;
 
   try {
@@ -37,3 +37,4 @@ export async function GET(req: Request) {
     return routeError(500, "Failed to fetch customer bookings");
   }
 }
+

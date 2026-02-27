@@ -2,6 +2,8 @@ import { apiError, apiSuccess } from "@/lib/backend/http";
 import { getCustomerSessionFromRequest } from "@/lib/backend/customerAuth";
 import type { CustomerPortalSession } from "@/lib/backend/customerTripsPortal";
 import { getCustomerTripDetail } from "@/lib/backend/customerTripsPortal";
+import { readSupabaseSessionFromRequest } from "@/lib/auth/supabaseSession";
+import { getIdentityProfileByUserId } from "@/lib/auth/identityProfiles";
 import {
   createCustomerSupportRequest,
   listCustomerSupportRequestsByBooking,
@@ -27,7 +29,28 @@ function asCustomerPortalSession(value: unknown): CustomerPortalSession | null {
     email: safeString(row.email) || undefined,
     phone: safeString(row.phone) || undefined,
     provider,
+    role: "customer",
   };
+}
+
+async function resolveCustomerSession(req: Request): Promise<CustomerPortalSession | null> {
+  const supabaseSession = readSupabaseSessionFromRequest(req);
+  if (supabaseSession) {
+    const profile = await getIdentityProfileByUserId(supabaseSession.userId);
+    const role = profile?.role || supabaseSession.role || "customer";
+    if (role !== "customer" && role !== "agent") return null;
+    return {
+      id: supabaseSession.userId,
+      name: supabaseSession.fullName || profile?.full_name || "User",
+      email: supabaseSession.email || profile?.email || undefined,
+      phone: supabaseSession.phone || profile?.phone || undefined,
+      provider: "supabase",
+      role,
+    };
+  }
+
+  const rawSession = getCustomerSessionFromRequest(req);
+  return asCustomerPortalSession(rawSession);
 }
 
 async function verifyOwnedBooking(session: CustomerPortalSession, bookingId: string) {
@@ -36,8 +59,7 @@ async function verifyOwnedBooking(session: CustomerPortalSession, bookingId: str
 }
 
 export async function GET(req: Request) {
-  const rawSession = getCustomerSessionFromRequest(req);
-  const session = asCustomerPortalSession(rawSession);
+  const session = await resolveCustomerSession(req);
   if (!session) {
     return apiError(req, 401, "UNAUTHORIZED", "Unauthorized");
   }
@@ -58,8 +80,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const rawSession = getCustomerSessionFromRequest(req);
-  const session = asCustomerPortalSession(rawSession);
+  const session = await resolveCustomerSession(req);
   if (!session) {
     return apiError(req, 401, "UNAUTHORIZED", "Unauthorized");
   }
@@ -118,4 +139,3 @@ export async function POST(req: Request) {
     return apiError(req, 500, "SUPPORT_CREATE_FAILED", "Failed to create support request");
   }
 }
-

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { clearCustomerSessionCookie } from "@/lib/backend/customerAuth";
 import { getRequestId, safeLog } from "@/lib/system/requestContext";
+import { clearSupabaseSessionCookie } from "@/lib/auth/supabaseSession";
 
 export async function POST(req: Request) {
   const requestId = getRequestId(req);
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
     const response = NextResponse.json({ ok: true });
     response.headers.set("x-request-id", requestId);
     clearCustomerSessionCookie(response);
+    clearSupabaseSessionCookie(response);
     safeLog(
       "auth.customer.logout.success",
       {

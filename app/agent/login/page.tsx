@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Mail, Smartphone } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Mail, Smartphone } from "lucide-react";
 
 interface ApiErrorShape {
   ok?: false;
@@ -36,10 +36,9 @@ function readErrorMessage(payload: unknown, fallback: string): string {
   return row?.error?.message || fallback;
 }
 
-function LoginContent() {
+function AgentLoginContent() {
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/my-trips";
-  const oauthError = searchParams.get("error");
+  const nextPath = searchParams.get("next") || "/agent/dashboard";
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -49,36 +48,20 @@ function LoginContent() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const oauthErrorMessage = useMemo(() => {
-    if (!oauthError) return null;
-    const map: Record<string, string> = {
-      google_state_mismatch: "Google login session expired. Please try again.",
-      google_missing_code: "Google callback did not include a code.",
-      google_provider_error: "Google login was cancelled or failed.",
-      google_token_exchange_failed: "Google token exchange failed. Please retry.",
-      google_auth_failed: "Google login failed. Please retry.",
-      supabase_auth_not_configured: "Supabase Auth is not configured yet.",
-    };
-    return map[oauthError] || "Login failed. Please try again.";
-  }, [oauthError]);
-
-  useEffect(() => {
-    if (!oauthErrorMessage) return;
-    setError(oauthErrorMessage);
-  }, [oauthErrorMessage]);
-
   useEffect(() => {
     void (async () => {
       try {
         const response = await fetch("/api/customer-auth/me", { cache: "no-store" });
-        if (response.ok) {
-          window.location.href = nextPath;
+        if (!response.ok) return;
+        const payload = (await response.json()) as { user?: { role?: string } };
+        if (payload.user?.role === "agent") {
+          window.location.href = "/agent/dashboard";
         }
       } catch {
         // no-op
       }
     })();
-  }, [nextPath]);
+  }, []);
 
   async function onGoogleLogin() {
     setError(null);
@@ -134,7 +117,13 @@ function LoginContent() {
       if (!response.ok) {
         throw new Error(readErrorMessage(payload, "OTP verification failed"));
       }
-      const next = payload.data?.nextPath || nextPath || "/my-trips";
+
+      const resolvedRole = payload.data?.role || "customer";
+      if (resolvedRole !== "agent") {
+        throw new Error("This account is not configured as a B2B agent.");
+      }
+
+      const next = payload.data?.nextPath || nextPath || "/agent/dashboard";
       window.location.href = next;
     } catch (err) {
       setError(err instanceof Error ? err.message : "OTP verification failed");
@@ -155,20 +144,12 @@ function LoginContent() {
         body: JSON.stringify({
           email,
           password,
+          expectedRole: "agent",
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as PasswordLoginSuccess & ApiErrorShape;
       if (!response.ok) {
         throw new Error(readErrorMessage(payload, "Login failed"));
-      }
-      const role = payload.data?.role || "customer";
-      if (role === "admin") {
-        window.location.href = "/admin/control-center";
-        return;
-      }
-      if (role === "supplier") {
-        window.location.href = "/supplier/dashboard";
-        return;
       }
       window.location.href = nextPath;
     } catch (err) {
@@ -188,10 +169,8 @@ function LoginContent() {
         </div>
 
         <div className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-          <h1 className="text-3xl font-semibold text-slate-900">Sign in</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Login with Google or mobile OTP. Office and supplier users can use email/password.
-          </p>
+          <h1 className="text-3xl font-semibold text-slate-900">Agent Sign In</h1>
+          <p className="mt-2 text-sm text-slate-600">B2B portal login for travel agents and agency teams.</p>
 
           <button
             type="button"
@@ -240,7 +219,7 @@ function LoginContent() {
           </form>
 
           <div className="mt-6 border-t border-slate-200 pt-5">
-            <p className="mb-2 text-sm font-semibold text-slate-700">Office / Supplier login</p>
+            <p className="mb-2 text-sm font-semibold text-slate-700">Agent email/password</p>
             <form onSubmit={onPasswordLogin} className="space-y-3">
               <input
                 type="email"
@@ -271,13 +250,10 @@ function LoginContent() {
 
           <div className="mt-5 space-y-2 text-sm">
             <Link href={`/signup?next=${encodeURIComponent(nextPath)}`} className="font-semibold text-[#199ce0]">
-              New here? Create an account
+              New agent? Create account
             </Link>
-            <Link href="/agent/login" className="block font-semibold text-[#199ce0]">
-              B2B Agent Login
-            </Link>
-            <Link href="/admin-login" className="block font-semibold text-[#199ce0]">
-              Office Admin Login
+            <Link href="/login" className="block font-semibold text-[#199ce0]">
+              Customer login
             </Link>
           </div>
 
@@ -296,16 +272,22 @@ function LoginContent() {
               Back to website
             </Link>
           </div>
+          <div className="mt-2 text-sm text-slate-500">
+            <span className="inline-flex items-center gap-2">
+              <BriefcaseBusiness className="h-4 w-4" />
+              B2B Agent Portal
+            </span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-export default function LoginPage() {
+export default function AgentLoginPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-      <LoginContent />
+      <AgentLoginContent />
     </Suspense>
   );
 }

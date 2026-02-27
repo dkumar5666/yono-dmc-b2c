@@ -5,6 +5,8 @@ import {
   verifyCustomerSessionToken,
 } from "@/lib/backend/customerAuth";
 import { SupabaseNotConfiguredError, SupabaseRestClient } from "@/lib/core/supabase-rest";
+import { readSupabaseSessionFromCookieStore } from "@/lib/auth/supabaseSession";
+import { getIdentityProfileByUserId } from "@/lib/auth/identityProfiles";
 
 type CookieStore = {
   get(name: string): { value: string } | undefined;
@@ -16,7 +18,8 @@ export interface CustomerPortalSession {
   name: string;
   email?: string;
   phone?: string;
-  provider: "google" | "mobile_otp";
+  provider: "google" | "mobile_otp" | "supabase";
+  role?: "customer" | "agent" | "supplier" | "admin";
 }
 
 export interface CustomerTripListItem {
@@ -312,6 +315,23 @@ async function fetchItemsForBooking(db: SupabaseRestClient, bookingRow: GenericR
 }
 
 export async function getCustomerPortalSession(cookieStore: CookieStore): Promise<CustomerPortalSession | null> {
+  const supabaseSession = readSupabaseSessionFromCookieStore(cookieStore);
+  if (supabaseSession) {
+    const profile = await getIdentityProfileByUserId(supabaseSession.userId);
+    const role = profile?.role || supabaseSession.role || "customer";
+    if (role !== "customer" && role !== "agent") {
+      return null;
+    }
+    return {
+      id: supabaseSession.userId,
+      name: supabaseSession.fullName || profile?.full_name || "User",
+      email: supabaseSession.email || profile?.email || undefined,
+      phone: supabaseSession.phone || profile?.phone || undefined,
+      provider: "supabase",
+      role,
+    };
+  }
+
   const token = cookieStore.get(CUSTOMER_AUTH_COOKIE_NAME)?.value;
   if (!token) return null;
   const session = verifyCustomerSessionToken(token);

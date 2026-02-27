@@ -4,7 +4,7 @@ import { clearSupabaseSessionCookie } from "@/lib/auth/supabaseSession";
 
 export async function POST() {
   const response = NextResponse.json({ ok: true });
-  clearSessionCookie(response);
   clearSupabaseSessionCookie(response);
+  clearSessionCookie(response);
   return response;
 }

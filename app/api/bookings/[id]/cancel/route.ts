@@ -12,7 +12,7 @@ export async function POST(
   req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  const auth = requireRole(req, ["customer", "admin"]);
+  const auth = requireRole(req, ["customer", "agent", "admin"]);
   if (auth.denied) return auth.denied;
 
   try {
@@ -53,3 +53,4 @@ export async function POST(
     return routeError(500, "Failed to cancel booking");
   }
 }
+

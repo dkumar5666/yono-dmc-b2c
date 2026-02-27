@@ -13,7 +13,7 @@ export async function GET(
   req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  const auth = requireRole(req, ["customer", "admin"]);
+  const auth = requireRole(req, ["customer", "agent", "admin"]);
   if (auth.denied) return auth.denied;
 
   try {
@@ -59,7 +59,7 @@ export async function PATCH(
   req: Request,
   context: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  const auth = requireRole(req, ["customer", "admin"]);
+  const auth = requireRole(req, ["customer", "agent", "admin"]);
   if (auth.denied) return auth.denied;
 
   try {
@@ -124,3 +124,4 @@ export async function PATCH(
     return routeError(500, "Failed to update booking");
   }
 }
+

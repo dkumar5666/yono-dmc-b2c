@@ -21,7 +21,7 @@ const bookingStatuses: BookingStatus[] = [
 ];
 
 export async function GET(req: Request) {
-  const auth = requireRole(req, ["customer", "admin"]);
+  const auth = requireRole(req, ["customer", "agent", "admin"]);
   if (auth.denied) return auth.denied;
 
   try {
@@ -58,7 +58,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = requireRole(req, ["customer", "admin"]);
+  const auth = requireRole(req, ["customer", "agent", "admin"]);
   if (auth.denied) return auth.denied;
 
   try {
@@ -101,3 +101,4 @@ export async function POST(req: Request) {
     return routeError(500, "Failed to create booking");
   }
 }
+

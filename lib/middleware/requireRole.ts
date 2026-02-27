@@ -4,6 +4,7 @@ import {
   extractBearerToken,
   getUserRoleFromJWT,
 } from "@/lib/auth/getUserRoleFromJWT";
+import { readSupabaseSessionFromRequest } from "@/lib/auth/supabaseSession";
 import { getSessionFromRequest } from "@/lib/backend/sessionAuth";
 import { routeError } from "@/lib/middleware/routeError";
 
@@ -30,6 +31,31 @@ export function requireRole(req: Request, allowed: AllowedRoles): RequireRoleRes
   const required = normalizeAllowed(allowed);
   const token = extractBearerToken(req);
   if (!token) {
+    const supabaseSession = readSupabaseSessionFromRequest(req);
+    const supabaseRole = (supabaseSession?.role || null) as AuthRole | null;
+    if (supabaseSession && supabaseRole) {
+      if (required.includes(supabaseRole)) {
+        return {
+          denied: null,
+          role: supabaseRole,
+          userId: supabaseSession.userId,
+          claims: {
+            auth_provider: "supabase_cookie_session",
+            role: supabaseRole,
+          },
+        };
+      }
+      return {
+        denied: routeError(403, "Not authorized"),
+        role: supabaseRole,
+        userId: supabaseSession.userId,
+        claims: {
+          auth_provider: "supabase_cookie_session",
+          role: supabaseRole,
+        },
+      };
+    }
+
     // Backward-compatible bridge for existing /admin UI which still authenticates
     // via signed session cookie (not Supabase JWT). Only allow this path for admin
     // protected routes so customer/supplier APIs remain JWT-only.

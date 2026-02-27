@@ -4,7 +4,9 @@ import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Mail, Smartphone } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, Phone, UserRound } from "lucide-react";
+
+type AccountType = "customer" | "agent";
 
 interface ApiErrorShape {
   ok?: false;
@@ -23,49 +25,29 @@ interface OtpVerifySuccess {
   };
 }
 
-interface PasswordLoginSuccess {
-  ok?: true;
-  data?: {
-    loggedIn?: boolean;
-    role?: string;
-  };
-}
-
 function readErrorMessage(payload: unknown, fallback: string): string {
   const row = payload as ApiErrorShape | null;
   return row?.error?.message || fallback;
 }
 
-function LoginContent() {
+function SignupContent() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/my-trips";
-  const oauthError = searchParams.get("error");
+
+  const [accountType, setAccountType] = useState<AccountType>("customer");
+  const [fullName, setFullName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const oauthErrorMessage = useMemo(() => {
-    if (!oauthError) return null;
-    const map: Record<string, string> = {
-      google_state_mismatch: "Google login session expired. Please try again.",
-      google_missing_code: "Google callback did not include a code.",
-      google_provider_error: "Google login was cancelled or failed.",
-      google_token_exchange_failed: "Google token exchange failed. Please retry.",
-      google_auth_failed: "Google login failed. Please retry.",
-      supabase_auth_not_configured: "Supabase Auth is not configured yet.",
-    };
-    return map[oauthError] || "Login failed. Please try again.";
-  }, [oauthError]);
-
-  useEffect(() => {
-    if (!oauthErrorMessage) return;
-    setError(oauthErrorMessage);
-  }, [oauthErrorMessage]);
+  const roleLabel = useMemo(() => {
+    return accountType === "agent" ? "Travel Agent (B2B)" : "Customer (B2C)";
+  }, [accountType]);
 
   useEffect(() => {
     void (async () => {
@@ -75,24 +57,42 @@ function LoginContent() {
           window.location.href = nextPath;
         }
       } catch {
-        // no-op
+        // ignore
       }
     })();
   }, [nextPath]);
 
-  async function onGoogleLogin() {
-    setError(null);
-    setMessage(null);
-    const query = new URLSearchParams({
+  function validateRoleFields(): boolean {
+    if (accountType === "agent" && !companyName.trim()) {
+      setError("Agency / company name is required for B2B signup.");
+      return false;
+    }
+    return true;
+  }
+
+  function buildGoogleUrl(): string {
+    const params = new URLSearchParams({
+      role: accountType,
       next: nextPath,
     });
-    window.location.href = `/api/auth/supabase/google/start?${query.toString()}`;
+    if (fullName.trim()) params.set("full_name", fullName.trim());
+    if (city.trim()) params.set("city", city.trim());
+    if (companyName.trim()) params.set("company_name", companyName.trim());
+    return `/api/auth/supabase/google/start?${params.toString()}`;
+  }
+
+  async function onGoogleSignup() {
+    setError(null);
+    setMessage(null);
+    if (!validateRoleFields()) return;
+    window.location.href = buildGoogleUrl();
   }
 
   async function onSendOtp(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setMessage(null);
+    if (!validateRoleFields()) return;
     setLoading(true);
     try {
       const response = await fetch("/api/auth/supabase/otp/send", {
@@ -100,6 +100,10 @@ function LoginContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone,
+          role: accountType,
+          fullName: fullName.trim() || undefined,
+          companyName: companyName.trim() || undefined,
+          city: city.trim() || undefined,
           next: nextPath,
         }),
       });
@@ -108,7 +112,7 @@ function LoginContent() {
         throw new Error(readErrorMessage(payload, "Failed to send OTP"));
       }
       setOtpSent(true);
-      setMessage("OTP sent. Enter the verification code.");
+      setMessage("OTP sent successfully. Enter the verification code.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send OTP");
     } finally {
@@ -143,41 +147,6 @@ function LoginContent() {
     }
   }
 
-  async function onPasswordLogin(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setMessage(null);
-    setLoading(true);
-    try {
-      const response = await fetch("/api/auth/supabase/password/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as PasswordLoginSuccess & ApiErrorShape;
-      if (!response.ok) {
-        throw new Error(readErrorMessage(payload, "Login failed"));
-      }
-      const role = payload.data?.role || "customer";
-      if (role === "admin") {
-        window.location.href = "/admin/control-center";
-        return;
-      }
-      if (role === "supplier") {
-        window.location.href = "/supplier/dashboard";
-        return;
-      }
-      window.location.href = nextPath;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-10">
@@ -188,15 +157,67 @@ function LoginContent() {
         </div>
 
         <div className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-          <h1 className="text-3xl font-semibold text-slate-900">Sign in</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Login with Google or mobile OTP. Office and supplier users can use email/password.
-          </p>
+          <h1 className="text-3xl font-semibold text-slate-900">Create account</h1>
+          <p className="mt-2 text-sm text-slate-600">Choose account type and continue with Google or mobile OTP.</p>
+
+          <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <button
+              type="button"
+              onClick={() => setAccountType("customer")}
+              className={[
+                "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
+                accountType === "customer" ? "bg-white text-[#199ce0] shadow-sm" : "text-slate-600",
+              ].join(" ")}
+            >
+              <UserRound className="h-4 w-4" />
+              Customer
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountType("agent")}
+              className={[
+                "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition",
+                accountType === "agent" ? "bg-white text-[#199ce0] shadow-sm" : "text-slate-600",
+              ].join(" ")}
+            >
+              <BriefcaseBusiness className="h-4 w-4" />
+              Agent
+            </button>
+          </div>
+
+          <p className="mt-2 text-xs font-medium text-slate-500">Selected: {roleLabel}</p>
+
+          <div className="mt-4 space-y-3">
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Full name"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
+            />
+            {accountType === "agent" ? (
+              <input
+                type="text"
+                required
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Agency / company name *"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
+              />
+            ) : null}
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="City"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
+            />
+          </div>
 
           <button
             type="button"
-            onClick={() => void onGoogleLogin()}
-            className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#199ce0] px-4 py-3 font-semibold text-white hover:opacity-90"
+            onClick={() => void onGoogleSignup()}
+            className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-xl bg-[#199ce0] px-4 py-3 font-semibold text-white hover:opacity-90"
           >
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white font-bold text-[#199ce0]">
               G
@@ -234,50 +255,14 @@ function LoginContent() {
               disabled={loading}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#199ce0] px-4 py-3 font-semibold text-white hover:opacity-90 disabled:opacity-60"
             >
-              <Smartphone className="h-4 w-4" />
-              {loading ? "Please wait..." : otpSent ? "Verify OTP" : "Send OTP"}
+              <Phone className="h-4 w-4" />
+              {loading ? "Please wait..." : otpSent ? "Verify OTP" : "Continue with OTP"}
             </button>
           </form>
 
-          <div className="mt-6 border-t border-slate-200 pt-5">
-            <p className="mb-2 text-sm font-semibold text-slate-700">Office / Supplier login</p>
-            <form onSubmit={onPasswordLogin} className="space-y-3">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
-              />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60"
-              >
-                <Mail className="h-4 w-4" />
-                Sign in with email
-              </button>
-            </form>
-          </div>
-
-          <div className="mt-5 space-y-2 text-sm">
-            <Link href={`/signup?next=${encodeURIComponent(nextPath)}`} className="font-semibold text-[#199ce0]">
-              New here? Create an account
-            </Link>
-            <Link href="/agent/login" className="block font-semibold text-[#199ce0]">
-              B2B Agent Login
-            </Link>
-            <Link href="/admin-login" className="block font-semibold text-[#199ce0]">
-              Office Admin Login
+          <div className="mt-5 text-sm">
+            <Link href={`/login?next=${encodeURIComponent(nextPath)}`} className="font-semibold text-[#199ce0]">
+              Already have an account? Sign in
             </Link>
           </div>
 
@@ -302,10 +287,11 @@ function LoginContent() {
   );
 }
 
-export default function LoginPage() {
+export default function SignupPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-      <LoginContent />
+      <SignupContent />
     </Suspense>
   );
 }
+
