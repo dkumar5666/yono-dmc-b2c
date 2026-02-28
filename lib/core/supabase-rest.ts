@@ -12,15 +12,23 @@ interface SupabaseConfig {
 }
 
 export function getSupabaseConfig(): SupabaseConfig | null {
-  const url = process.env.SUPABASE_URL?.trim();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const url =
+    process.env.SUPABASE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+    "";
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    process.env.SUPABASE_SERVICE_KEY?.trim() ||
+    "";
   if (!url || !serviceRoleKey) return null;
   return { url, serviceRoleKey };
 }
 
 export class SupabaseNotConfiguredError extends Error {
   constructor() {
-    super("Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+    super(
+      "Supabase is not configured. Set SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY."
+    );
     this.name = "SupabaseNotConfiguredError";
   }
 }
