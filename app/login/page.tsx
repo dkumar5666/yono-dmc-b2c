@@ -4,7 +4,7 @@ import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Mail, Smartphone } from "lucide-react";
+import { ArrowLeft, Smartphone } from "lucide-react";
 
 interface ApiErrorShape {
   ok?: false;
@@ -23,28 +23,27 @@ interface OtpVerifySuccess {
   };
 }
 
-interface PasswordLoginSuccess {
-  ok?: true;
-  data?: {
-    loggedIn?: boolean;
-    role?: string;
-  };
-}
-
 function readErrorMessage(payload: unknown, fallback: string): string {
   const row = payload as ApiErrorShape | null;
   return row?.error?.message || fallback;
 }
 
+function sanitizeNextPath(nextPath: string | null): string {
+  if (!nextPath) return "/my-trips";
+  if (!nextPath.startsWith("/")) return "/my-trips";
+  if (nextPath.startsWith("//")) return "/my-trips";
+  return nextPath;
+}
+
 function LoginContent() {
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/my-trips";
+  const nextPath = sanitizeNextPath(searchParams.get("next"));
+  const supportWhatsAppUrl =
+    process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_URL?.trim() || "https://wa.me/919958839319";
   const oauthError = searchParams.get("error");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,41 +142,6 @@ function LoginContent() {
     }
   }
 
-  async function onPasswordLogin(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setMessage(null);
-    setLoading(true);
-    try {
-      const response = await fetch("/api/auth/supabase/password/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as PasswordLoginSuccess & ApiErrorShape;
-      if (!response.ok) {
-        throw new Error(readErrorMessage(payload, "Login failed"));
-      }
-      const role = payload.data?.role || "customer";
-      if (role === "admin") {
-        window.location.href = "/admin/control-center";
-        return;
-      }
-      if (role === "supplier") {
-        window.location.href = "/supplier/dashboard";
-        return;
-      }
-      window.location.href = nextPath;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-10">
@@ -188,9 +152,9 @@ function LoginContent() {
         </div>
 
         <div className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-          <h1 className="text-3xl font-semibold text-slate-900">Sign in</h1>
+          <h1 className="text-3xl font-semibold text-slate-900">Customer Login</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Login with Google or mobile OTP. Office and supplier users can use email/password.
+            Sign in with Google or mobile OTP to view your trips, payments, and documents.
           </p>
 
           <button
@@ -239,45 +203,9 @@ function LoginContent() {
             </button>
           </form>
 
-          <div className="mt-6 border-t border-slate-200 pt-5">
-            <p className="mb-2 text-sm font-semibold text-slate-700">Office / Supplier login</p>
-            <form onSubmit={onPasswordLogin} className="space-y-3">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
-              />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60"
-              >
-                <Mail className="h-4 w-4" />
-                Sign in with email
-              </button>
-            </form>
-          </div>
-
-          <div className="mt-5 space-y-2 text-sm">
+          <div className="mt-5 text-sm">
             <Link href={`/signup?next=${encodeURIComponent(nextPath)}`} className="font-semibold text-[#199ce0]">
               New here? Create an account
-            </Link>
-            <Link href="/agent/login" className="block font-semibold text-[#199ce0]">
-              B2B Agent Login
-            </Link>
-            <Link href="/admin/login" className="block font-semibold text-[#199ce0]">
-              Office Admin Login
             </Link>
           </div>
 
@@ -289,6 +217,23 @@ function LoginContent() {
               {message}
             </p>
           ) : null}
+
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <p className="font-medium text-slate-800">Need help signing in?</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <a
+                href={supportWhatsAppUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-[#199ce0] hover:underline"
+              >
+                Support WhatsApp
+              </a>
+              <Link href="/support" className="font-semibold text-[#199ce0] hover:underline">
+                FAQ & Support
+              </Link>
+            </div>
+          </div>
 
           <div className="mt-6 text-sm">
             <Link href="/" className="inline-flex items-center gap-2 font-semibold text-[#199ce0]">

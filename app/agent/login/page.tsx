@@ -11,7 +11,7 @@ export default function AgentLoginPage() {
     <AuthShell
       title="Agent Login"
       subtitle="For travel agents to manage quotations, bookings, and customer requests."
-      roleBadge="B2B"
+      hideBrandName
       highlightsTitle="Operational Benefits"
       highlights={["Fast quotations", "Manage traveler documents", "Priority support"]}
     >
@@ -21,4 +21,3 @@ export default function AgentLoginPage() {
     </AuthShell>
   );
 }
-

@@ -5,7 +5,8 @@ import Link from "next/link";
 interface AuthShellProps {
   title: string;
   subtitle: string;
-  roleBadge: string;
+  roleBadge?: string;
+  hideBrandName?: boolean;
   children: ReactNode;
   highlightsTitle?: string;
   highlights?: string[];
@@ -15,6 +16,7 @@ export default function AuthShell({
   title,
   subtitle,
   roleBadge,
+  hideBrandName = false,
   children,
   highlightsTitle = "Portal Highlights",
   highlights = [],
@@ -27,11 +29,15 @@ export default function AuthShell({
             <div>
               <Link href="/" aria-label="Yono DMC home" className="inline-flex items-center gap-3">
                 <Image src="/logo.png" alt="Yono DMC" width={160} height={52} className="h-10 w-auto" priority />
-                <span className="text-base font-semibold tracking-tight text-slate-900">Yono DMC</span>
+                {!hideBrandName ? (
+                  <span className="text-base font-semibold tracking-tight text-slate-900">Yono DMC</span>
+                ) : null}
               </Link>
-              <span className="mt-6 inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
-                {roleBadge}
-              </span>
+              {roleBadge ? (
+                <span className="mt-6 inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
+                  {roleBadge}
+                </span>
+              ) : null}
               <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">{title}</h1>
               <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">{subtitle}</p>
             </div>
@@ -59,4 +65,3 @@ export default function AuthShell({
     </div>
   );
 }
-

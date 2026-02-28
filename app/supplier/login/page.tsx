@@ -10,7 +10,7 @@ export default function SupplierLoginPage() {
     <AuthShell
       title="Supplier Login"
       subtitle="For partners to manage allocations, confirmations, and service fulfillment."
-      roleBadge="Vendor"
+      hideBrandName
       highlightsTitle="Partner Operations"
       highlights={["Allocation visibility", "Faster confirmations", "Service fulfillment tracking"]}
     >
@@ -18,4 +18,3 @@ export default function SupplierLoginPage() {
     </AuthShell>
   );
 }
-
