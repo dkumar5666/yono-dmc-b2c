@@ -163,7 +163,7 @@ export async function POST(req: Request) {
         req,
         error.status >= 500 ? 502 : 400,
         "otp_send_failed",
-        "Failed to send email OTP. Please retry."
+        error.message || "Failed to send email OTP. Please retry."
       );
     }
     if (error instanceof TwilioVerifyRequestError) {
@@ -171,7 +171,7 @@ export async function POST(req: Request) {
         req,
         error.status >= 500 ? 502 : 400,
         "otp_send_failed",
-        "Failed to send email OTP. Please retry."
+        error.message || "Failed to send email OTP. Please retry."
       );
     }
     return apiError(req, 500, "otp_send_failed", "Failed to send email OTP.");

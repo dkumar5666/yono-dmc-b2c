@@ -22,6 +22,30 @@ function safeObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function hasRequiredBusinessDetails(signupRequest: {
+  business_type?: string | null;
+  company_legal_name?: string | null;
+  address?: string | null;
+  city?: string | null;
+  pin_code?: string | null;
+  country?: string | null;
+  contact_name?: string | null;
+  gstin?: string | null;
+  pan?: string | null;
+}): boolean {
+  return Boolean(
+    safeString(signupRequest.business_type) &&
+      safeString(signupRequest.company_legal_name) &&
+      safeString(signupRequest.address) &&
+      safeString(signupRequest.city) &&
+      safeString(signupRequest.pin_code) &&
+      safeString(signupRequest.country) &&
+      safeString(signupRequest.contact_name) &&
+      safeString(signupRequest.gstin) &&
+      safeString(signupRequest.pan)
+  );
+}
+
 export async function POST(req: Request) {
   const rate = checkSupplierSignupRateLimit(req, {
     namespace: "supplier_signup_submit",
@@ -73,6 +97,14 @@ export async function POST(req: Request) {
     }
     if (!signupRequest.phone_verified) {
       return apiError(req, 400, "phone_not_verified", "Mobile verification is required.");
+    }
+    if (!hasRequiredBusinessDetails(signupRequest)) {
+      return apiError(
+        req,
+        400,
+        "details_incomplete",
+        "Complete business details in step 2 before submitting documents."
+      );
     }
     if (!hasRequiredSupplierDocs(signupRequest.docs)) {
       return apiError(
