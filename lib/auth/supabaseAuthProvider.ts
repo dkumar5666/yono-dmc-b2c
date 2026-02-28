@@ -244,6 +244,13 @@ export async function sendPhoneOtp(params: { phone: string }): Promise<void> {
   });
 }
 
+export async function sendEmailOtp(params: { email: string }): Promise<void> {
+  await authPost<Record<string, never>>("/otp", {
+    email: params.email,
+    create_user: true,
+  });
+}
+
 export async function verifyPhoneOtp(params: {
   phone: string;
   token: string;
@@ -252,5 +259,16 @@ export async function verifyPhoneOtp(params: {
     phone: params.phone,
     token: params.token,
     type: "sms",
+  });
+}
+
+export async function verifyEmailOtp(params: {
+  email: string;
+  token: string;
+}): Promise<SupabaseAuthSessionResult> {
+  return authPost<SupabaseAuthSessionResult>("/verify", {
+    email: params.email,
+    token: params.token,
+    type: "email",
   });
 }

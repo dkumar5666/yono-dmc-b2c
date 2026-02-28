@@ -1,5 +1,11 @@
 import { apiError, apiSuccess } from "@/lib/backend/http";
 import {
+  sendPhoneOtp,
+  SupabaseAuthRequestError,
+  SupabaseAuthUnavailableError,
+} from "@/lib/auth/supabaseAuthProvider";
+import {
+  isTwilioVerifyConfigured,
   sendOtpWithTwilio,
   TwilioVerifyRequestError,
   TwilioVerifyUnavailableError,
@@ -64,14 +70,42 @@ export async function POST(req: Request) {
       });
     }
 
-    await sendOtpWithTwilio(phone);
+    let provider = "supabase_phone";
+    try {
+      await sendPhoneOtp({ phone });
+    } catch (supabaseError) {
+      const canUseTwilioFallback = isTwilioVerifyConfigured();
+      safeLog(
+        "supplier.signup.otp.phone.send.fallback_attempt",
+        {
+          requestId,
+          route: "/api/supplier/signup/otp/phone/send",
+          supplierRequestId: signupRequestId,
+          hasTwilioFallback: canUseTwilioFallback,
+          supabaseReason:
+            supabaseError instanceof SupabaseAuthUnavailableError
+              ? "supabase_auth_not_configured"
+              : supabaseError instanceof SupabaseAuthRequestError
+                ? supabaseError.code || "otp_send_failed"
+                : "otp_send_failed",
+        },
+        req
+      );
+
+      if (!canUseTwilioFallback) {
+        throw supabaseError;
+      }
+      await sendOtpWithTwilio(phone);
+      provider = "twilio_verify";
+    }
+
     const nowIso = new Date().toISOString();
     const existingMeta =
       signupRequest.meta && typeof signupRequest.meta === "object" ? signupRequest.meta : {};
     const nextMeta = {
       ...existingMeta,
       phone_otp_sent_at: nowIso,
-      phone_otp_provider: "twilio_verify",
+      phone_otp_provider: provider,
     };
     await updateSupplierSignupRequest(db, signupRequestId, { meta: nextMeta });
 
@@ -113,6 +147,22 @@ export async function POST(req: Request) {
         503,
         "otp_provider_unavailable",
         "Mobile OTP service is unavailable. Please try again later."
+      );
+    }
+    if (error instanceof SupabaseAuthUnavailableError) {
+      return apiError(
+        req,
+        503,
+        "otp_provider_unavailable",
+        "Mobile OTP service is unavailable. Please configure Supabase phone OTP or Twilio Verify."
+      );
+    }
+    if (error instanceof SupabaseAuthRequestError) {
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 400,
+        "otp_send_failed",
+        "Failed to send mobile OTP. Please retry."
       );
     }
     if (error instanceof TwilioVerifyRequestError) {

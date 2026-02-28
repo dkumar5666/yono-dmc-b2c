@@ -160,6 +160,7 @@ export async function POST(req: Request) {
       brand_name: validation.data.brand_name || null,
       address: validation.data.address,
       city: validation.data.city,
+      pin_code: validation.data.pin_code,
       country: validation.data.country || "India",
       website: validation.data.website || null,
       contact_name: validation.data.contact_name,
@@ -181,11 +182,20 @@ export async function POST(req: Request) {
       updated_at: nowIso,
     };
 
-    const inserted = await safeInsert<SupplierSignupRequestRow>(
-      db,
-      "supplier_signup_requests",
-      payload
-    );
+    const insertCandidates: Array<Record<string, unknown>> = [
+      payload,
+      Object.fromEntries(Object.entries(payload).filter(([key]) => key !== "pin_code")),
+    ];
+
+    let inserted: SupplierSignupRequestRow | null = null;
+    for (const candidate of insertCandidates) {
+      inserted = await safeInsert<SupplierSignupRequestRow>(
+        db,
+        "supplier_signup_requests",
+        candidate
+      );
+      if (inserted) break;
+    }
     if (!inserted) {
       const fallbackExisting = await findExistingRequest(db, {
         contactEmail: validation.data.contact_email,

@@ -10,6 +10,7 @@ export interface SupplierSignupRequestRow {
   brand_name?: string | null;
   address?: string | null;
   city?: string | null;
+  pin_code?: string | null;
   country?: string | null;
   website?: string | null;
   contact_name?: string | null;
@@ -86,7 +87,7 @@ export async function getSupplierSignupRequestById(
   if (!id) return null;
 
   const attempts = [
-    "id,status,business_type,company_legal_name,brand_name,address,city,country,website,contact_name,contact_email,contact_phone,alt_phone,support_email,gstin,pan,cin,iata_code,license_no,bank_meta,docs,email_verified,phone_verified,meta,created_at,updated_at",
+    "id,status,business_type,company_legal_name,brand_name,address,city,pin_code,country,website,contact_name,contact_email,contact_phone,alt_phone,support_email,gstin,pan,cin,iata_code,license_no,bank_meta,docs,email_verified,phone_verified,meta,created_at,updated_at",
     "*",
   ];
 

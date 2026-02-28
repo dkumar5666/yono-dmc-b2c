@@ -8,6 +8,7 @@ create table if not exists public.supplier_signup_requests (
   brand_name text,
   address text,
   city text,
+  pin_code text,
   country text,
   website text,
   contact_name text,

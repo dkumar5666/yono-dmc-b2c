@@ -1,5 +1,10 @@
 import { apiError, apiSuccess } from "@/lib/backend/http";
 import {
+  SupabaseAuthRequestError,
+  SupabaseAuthUnavailableError,
+  verifyPhoneOtp,
+} from "@/lib/auth/supabaseAuthProvider";
+import {
   verifyOtpWithTwilio,
   TwilioVerifyRequestError,
   TwilioVerifyUnavailableError,
@@ -20,6 +25,11 @@ interface VerifyPhoneOtpBody {
 
 function safeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function safeObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
 }
 
 export async function POST(req: Request) {
@@ -70,12 +80,22 @@ export async function POST(req: Request) {
       return apiError(req, 400, "phone_missing", "Primary contact phone is missing.");
     }
 
-    const verify = await verifyOtpWithTwilio({
-      phone,
-      token: otp,
-    });
-    if (!verify.approved) {
-      return apiError(req, 401, "otp_invalid", "Invalid OTP.");
+    const meta = safeObject(signupRequest.meta);
+    const provider = safeString(meta.phone_otp_provider) || "twilio_verify";
+
+    if (provider.startsWith("supabase")) {
+      await verifyPhoneOtp({
+        phone,
+        token: otp,
+      });
+    } else {
+      const verify = await verifyOtpWithTwilio({
+        phone,
+        token: otp,
+      });
+      if (!verify.approved) {
+        return apiError(req, 401, "otp_invalid", "Invalid OTP.");
+      }
     }
 
     await updateSupplierSignupRequest(db, signupRequestId, { phone_verified: true });
@@ -114,6 +134,22 @@ export async function POST(req: Request) {
         503,
         "otp_provider_unavailable",
         "Mobile OTP service is unavailable. Please try again later."
+      );
+    }
+    if (error instanceof SupabaseAuthUnavailableError) {
+      return apiError(
+        req,
+        503,
+        "otp_provider_unavailable",
+        "Mobile OTP service is unavailable. Please configure Supabase phone OTP."
+      );
+    }
+    if (error instanceof SupabaseAuthRequestError) {
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 401,
+        "otp_invalid",
+        "Failed to verify mobile OTP."
       );
     }
     if (error instanceof TwilioVerifyRequestError) {

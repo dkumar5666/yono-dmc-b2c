@@ -1,5 +1,10 @@
 import { apiError, apiSuccess } from "@/lib/backend/http";
 import {
+  SupabaseAuthRequestError,
+  SupabaseAuthUnavailableError,
+  verifyEmailOtp,
+} from "@/lib/auth/supabaseAuthProvider";
+import {
   verifyEmailOtpWithTwilio,
   TwilioVerifyRequestError,
   TwilioVerifyUnavailableError,
@@ -20,6 +25,11 @@ interface VerifyEmailOtpBody {
 
 function safeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function safeObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
 }
 
 export async function POST(req: Request) {
@@ -70,12 +80,22 @@ export async function POST(req: Request) {
       return apiError(req, 400, "email_missing", "Primary contact email is missing.");
     }
 
-    const verify = await verifyEmailOtpWithTwilio({
-      email,
-      token: otp,
-    });
-    if (!verify.approved) {
-      return apiError(req, 401, "otp_invalid", "Invalid OTP.");
+    const meta = safeObject(signupRequest.meta);
+    const provider = safeString(meta.email_otp_provider) || "twilio_verify_email";
+
+    if (provider.startsWith("supabase")) {
+      await verifyEmailOtp({
+        email,
+        token: otp,
+      });
+    } else {
+      const verify = await verifyEmailOtpWithTwilio({
+        email,
+        token: otp,
+      });
+      if (!verify.approved) {
+        return apiError(req, 401, "otp_invalid", "Invalid OTP.");
+      }
     }
 
     await updateSupplierSignupRequest(db, signupRequestId, { email_verified: true });
@@ -114,6 +134,22 @@ export async function POST(req: Request) {
         503,
         "otp_provider_unavailable",
         "Email OTP service is unavailable. Please try again later."
+      );
+    }
+    if (error instanceof SupabaseAuthUnavailableError) {
+      return apiError(
+        req,
+        503,
+        "otp_provider_unavailable",
+        "Email OTP service is unavailable. Please configure Supabase email OTP."
+      );
+    }
+    if (error instanceof SupabaseAuthRequestError) {
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 401,
+        "otp_invalid",
+        "Failed to verify email OTP."
       );
     }
     if (error instanceof TwilioVerifyRequestError) {

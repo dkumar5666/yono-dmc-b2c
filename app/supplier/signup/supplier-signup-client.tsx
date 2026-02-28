@@ -56,6 +56,7 @@ interface SupplierSignupFormState {
   brand_name: string;
   address: string;
   city: string;
+  pin_code: string;
   country: string;
   website: string;
   contact_name: string;
@@ -81,6 +82,7 @@ const INITIAL_STATE: SupplierSignupFormState = {
   brand_name: "",
   address: "",
   city: "",
+  pin_code: "",
   country: "India",
   website: "",
   contact_name: "",
@@ -121,6 +123,7 @@ function validateStepOne(data: SupplierSignupFormState): string | null {
   if (!data.company_legal_name.trim()) return "Company legal name is required.";
   if (!data.address.trim()) return "Registered address is required.";
   if (!data.city.trim()) return "City is required.";
+  if (!data.pin_code.trim()) return "PIN code is required.";
   if (!data.contact_name.trim()) return "Primary contact name is required.";
   if (!data.contact_email.trim()) return "Primary contact email is required.";
   if (!data.contact_phone.trim()) return "Primary contact mobile is required.";
@@ -192,6 +195,7 @@ export default function SupplierSignupClient() {
         brand_name: form.brand_name || undefined,
         address: form.address,
         city: form.city,
+        pin_code: form.pin_code,
         country: form.country || "India",
         website: form.website || undefined,
         contact_name: form.contact_name,
@@ -442,6 +446,10 @@ export default function SupplierSignupClient() {
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">City *</label>
               <input value={form.city} onChange={(event) => updateField("city", event.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">PIN Code *</label>
+              <input value={form.pin_code} onChange={(event) => updateField("pin_code", event.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20" placeholder="400001" />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">Country *</label>

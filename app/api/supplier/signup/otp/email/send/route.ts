@@ -1,6 +1,12 @@
 import { apiError, apiSuccess } from "@/lib/backend/http";
 import {
+  sendEmailOtp,
+  SupabaseAuthRequestError,
+  SupabaseAuthUnavailableError,
+} from "@/lib/auth/supabaseAuthProvider";
+import {
   sendEmailOtpWithTwilio,
+  isTwilioVerifyConfigured,
   TwilioVerifyRequestError,
   TwilioVerifyUnavailableError,
 } from "@/lib/auth/twilioVerifyFallback";
@@ -65,14 +71,42 @@ export async function POST(req: Request) {
       });
     }
 
-    await sendEmailOtpWithTwilio(email);
+    let provider = "supabase_email";
+    try {
+      await sendEmailOtp({ email });
+    } catch (supabaseError) {
+      const canUseTwilioFallback = isTwilioVerifyConfigured();
+      safeLog(
+        "supplier.signup.otp.email.send.fallback_attempt",
+        {
+          requestId,
+          route: "/api/supplier/signup/otp/email/send",
+          supplierRequestId: signupRequestId,
+          hasTwilioFallback: canUseTwilioFallback,
+          supabaseReason:
+            supabaseError instanceof SupabaseAuthUnavailableError
+              ? "supabase_auth_not_configured"
+              : supabaseError instanceof SupabaseAuthRequestError
+                ? supabaseError.code || "otp_send_failed"
+                : "otp_send_failed",
+        },
+        req
+      );
+
+      if (!canUseTwilioFallback) {
+        throw supabaseError;
+      }
+      await sendEmailOtpWithTwilio(email);
+      provider = "twilio_verify_email";
+    }
+
     const nowIso = new Date().toISOString();
     const existingMeta =
       signupRequest.meta && typeof signupRequest.meta === "object" ? signupRequest.meta : {};
     const nextMeta = {
       ...existingMeta,
       email_otp_sent_at: nowIso,
-      email_otp_provider: "twilio_verify",
+      email_otp_provider: provider,
     };
     await updateSupplierSignupRequest(db, signupRequestId, { meta: nextMeta });
 
@@ -114,6 +148,22 @@ export async function POST(req: Request) {
         503,
         "otp_provider_unavailable",
         "Email OTP service is unavailable. Please try again later."
+      );
+    }
+    if (error instanceof SupabaseAuthUnavailableError) {
+      return apiError(
+        req,
+        503,
+        "otp_provider_unavailable",
+        "Email OTP service is unavailable. Please configure Supabase email OTP or Twilio Verify email."
+      );
+    }
+    if (error instanceof SupabaseAuthRequestError) {
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 400,
+        "otp_send_failed",
+        "Failed to send email OTP. Please retry."
       );
     }
     if (error instanceof TwilioVerifyRequestError) {

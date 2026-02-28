@@ -132,6 +132,7 @@ export default async function AdminSupplierSignupRequestDetailPage(props: PagePr
             <p><span className="font-medium text-slate-900">Company:</span> {safeString(row.company_legal_name) || "-"}</p>
             <p><span className="font-medium text-slate-900">Brand:</span> {safeString(row.brand_name) || "-"}</p>
             <p><span className="font-medium text-slate-900">City:</span> {safeString(row.city) || "-"}</p>
+            <p><span className="font-medium text-slate-900">PIN Code:</span> {safeString(row.pin_code) || "-"}</p>
             <p><span className="font-medium text-slate-900">Country:</span> {safeString(row.country) || "-"}</p>
             <p><span className="font-medium text-slate-900">Website:</span> {safeString(row.website) || "-"}</p>
             <p><span className="font-medium text-slate-900">Created:</span> {formatDateTime(row.created_at)}</p>

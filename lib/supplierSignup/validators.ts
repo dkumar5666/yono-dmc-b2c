@@ -39,6 +39,7 @@ export interface SupplierSignupRequestInput {
   brand_name?: string;
   address: string;
   city: string;
+  pin_code: string;
   country: string;
   website?: string;
   contact_name: string;
@@ -143,6 +144,7 @@ export function validateSupplierSignupRequestPayload(payload: unknown): Validati
   const brand_name = safeString(body.brand_name);
   const address = safeString(body.address);
   const city = safeString(body.city);
+  const pin_code = safeString(body.pin_code);
   const country = normalizeCountry(body.country);
   const website = normalizeWebsite(body.website);
   const contact_name = safeString(body.contact_name);
@@ -165,6 +167,7 @@ export function validateSupplierSignupRequestPayload(payload: unknown): Validati
   if (!company_legal_name) errors.push("Company legal name is required.");
   if (!address) errors.push("Registered address is required.");
   if (!city) errors.push("City is required.");
+  if (!pin_code) errors.push("PIN code is required.");
   if (!contact_name) errors.push("Primary contact name is required.");
   if (!contact_email) errors.push("Primary contact email is required.");
   if (!contact_phone) errors.push("Primary contact mobile is required.");
@@ -210,6 +213,7 @@ export function validateSupplierSignupRequestPayload(payload: unknown): Validati
       brand_name: brand_name || undefined,
       address,
       city,
+      pin_code,
       country,
       website: website || undefined,
       contact_name,
