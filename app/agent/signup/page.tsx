@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -28,7 +28,7 @@ function readErrorMessage(payload: unknown, fallback: string): string {
   return row?.error?.message || fallback;
 }
 
-export default function AgentSignupPage() {
+function AgentSignupContent() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/agent/dashboard";
 
@@ -296,5 +296,13 @@ export default function AgentSignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AgentSignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+      <AgentSignupContent />
+    </Suspense>
   );
 }
