@@ -64,10 +64,20 @@ async function setAuthUserAppMetadataRole(userId: string, role: IdentityRole): P
 async function ensureAgentProfile(
   db: SupabaseRestClient,
   userId: string,
-  input: { agencyName?: string; city?: string }
+  input: {
+    agencyName?: string;
+    city?: string;
+    taxId?: string;
+    governmentId?: string;
+    officeAddress?: string;
+  }
 ): Promise<void> {
+  const officeAddress = safeString(input.officeAddress) || safeString(input.city) || "";
+  const governmentId = safeString(input.governmentId);
+  const taxId = safeString(input.taxId);
+
   const query = new URLSearchParams({
-    select: "id,agency_name,office_address",
+    select: "id,agency_name,gst_number,pan_number,office_address,meta",
     id: `eq.${userId}`,
   });
   const existing = await db.selectSingle<GenericRow>("agent_profiles", query).catch(() => null);
@@ -76,29 +86,71 @@ async function ensureAgentProfile(
     if (!safeString(existing.agency_name) && safeString(input.agencyName)) {
       payload.agency_name = safeString(input.agencyName);
     }
-    if (!safeString(existing.office_address) && safeString(input.city)) {
-      payload.office_address = safeString(input.city);
+    if (!safeString(existing.gst_number) && taxId) {
+      payload.gst_number = taxId;
     }
+    if (!safeString(existing.pan_number) && governmentId) {
+      payload.pan_number = governmentId;
+    }
+    if (!safeString(existing.office_address) && officeAddress) {
+      payload.office_address = officeAddress;
+    }
+
+    const existingMeta =
+      existing.meta && typeof existing.meta === "object" && !Array.isArray(existing.meta)
+        ? (existing.meta as Record<string, unknown>)
+        : {};
+    if (!safeString(existingMeta.government_id) && governmentId) {
+      payload.meta = { ...existingMeta, government_id: governmentId };
+    }
+
     if (Object.keys(payload).length > 0) {
-      await db
-        .updateSingle<GenericRow>(
-          "agent_profiles",
-          new URLSearchParams({ id: `eq.${userId}` }),
-          payload
-        )
-        .catch(() => null);
+      const variants: Array<Record<string, unknown>> = [
+        payload,
+        {
+          agency_name: payload.agency_name,
+          office_address: payload.office_address,
+        },
+      ];
+      for (const variant of variants) {
+        const compact = Object.fromEntries(
+          Object.entries(variant).filter(([, value]) => value !== undefined)
+        );
+        if (Object.keys(compact).length === 0) continue;
+        const updated = await db
+          .updateSingle<GenericRow>(
+            "agent_profiles",
+            new URLSearchParams({ id: `eq.${userId}` }),
+            compact
+          )
+          .catch(() => null);
+        if (updated) break;
+      }
     }
     return;
   }
 
-  await db
-    .insertSingle<GenericRow>("agent_profiles", {
+  const insertVariants: Array<Record<string, unknown>> = [
+    {
       id: userId,
       agency_name: safeString(input.agencyName) || null,
-      office_address: safeString(input.city) || null,
+      gst_number: taxId || null,
+      pan_number: governmentId || null,
+      office_address: officeAddress || null,
       verification_status: "pending",
-    })
-    .catch(() => null);
+      meta: governmentId ? { government_id: governmentId } : {},
+    },
+    {
+      id: userId,
+      agency_name: safeString(input.agencyName) || null,
+      office_address: officeAddress || null,
+      verification_status: "pending",
+    },
+  ];
+  for (const payload of insertVariants) {
+    const inserted = await db.insertSingle<GenericRow>("agent_profiles", payload).catch(() => null);
+    if (inserted) break;
+  }
 }
 
 async function ensureSupplierProfile(db: SupabaseRestClient, userId: string): Promise<void> {
@@ -145,6 +197,9 @@ export async function ensureIdentityProfile(input: {
   fullName?: string;
   role?: IdentityRole;
   companyName?: string;
+  governmentId?: string;
+  taxId?: string;
+  officeAddress?: string;
   city?: string;
   country?: string;
   trustedRoleAssignment?: boolean;
@@ -193,6 +248,9 @@ export async function ensureIdentityProfile(input: {
       if (targetRole === "agent") {
         await ensureAgentProfile(db, userId, {
           agencyName: input.companyName,
+          taxId: input.taxId,
+          governmentId: input.governmentId,
+          officeAddress: input.officeAddress,
           city: input.city,
         });
       } else if (targetRole === "supplier") {
@@ -245,6 +303,9 @@ export async function ensureIdentityProfile(input: {
     if (nextRole === "agent") {
       await ensureAgentProfile(db, userId, {
         agencyName: input.companyName,
+        taxId: input.taxId,
+        governmentId: input.governmentId,
+        officeAddress: input.officeAddress,
         city: input.city,
       });
     } else if (nextRole === "supplier") {

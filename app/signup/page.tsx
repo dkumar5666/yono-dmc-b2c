@@ -33,10 +33,15 @@ function readErrorMessage(payload: unknown, fallback: string): string {
 function SignupContent() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/my-trips";
+  const roleHint = searchParams.get("role");
+  const initialAccountType: AccountType = roleHint === "agent" ? "agent" : "customer";
 
-  const [accountType, setAccountType] = useState<AccountType>("customer");
+  const [accountType, setAccountType] = useState<AccountType>(initialAccountType);
   const [fullName, setFullName] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [governmentId, setGovernmentId] = useState("");
+  const [taxId, setTaxId] = useState("");
+  const [officeAddress, setOfficeAddress] = useState("");
   const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -48,6 +53,10 @@ function SignupContent() {
   const roleLabel = useMemo(() => {
     return accountType === "agent" ? "Travel Agent (B2B)" : "Customer (B2C)";
   }, [accountType]);
+
+  useEffect(() => {
+    setAccountType(initialAccountType);
+  }, [initialAccountType]);
 
   useEffect(() => {
     void (async () => {
@@ -63,9 +72,19 @@ function SignupContent() {
   }, [nextPath]);
 
   function validateRoleFields(): boolean {
-    if (accountType === "agent" && !companyName.trim()) {
-      setError("Agency / company name is required for B2B signup.");
-      return false;
+    if (accountType === "agent") {
+      if (!companyName.trim()) {
+        setError("Agency / company name is required for agent signup.");
+        return false;
+      }
+      if (!governmentId.trim()) {
+        setError("Government ID is required for agent signup.");
+        return false;
+      }
+      if (!taxId.trim()) {
+        setError("Tax ID is required for agent signup.");
+        return false;
+      }
     }
     return true;
   }
@@ -78,6 +97,9 @@ function SignupContent() {
     if (fullName.trim()) params.set("full_name", fullName.trim());
     if (city.trim()) params.set("city", city.trim());
     if (companyName.trim()) params.set("company_name", companyName.trim());
+    if (governmentId.trim()) params.set("government_id", governmentId.trim());
+    if (taxId.trim()) params.set("tax_id", taxId.trim());
+    if (officeAddress.trim()) params.set("office_address", officeAddress.trim());
     return `/api/auth/supabase/google/start?${params.toString()}`;
   }
 
@@ -103,6 +125,9 @@ function SignupContent() {
           role: accountType,
           fullName: fullName.trim() || undefined,
           companyName: companyName.trim() || undefined,
+          governmentId: governmentId.trim() || undefined,
+          taxId: taxId.trim() || undefined,
+          officeAddress: officeAddress.trim() || undefined,
           city: city.trim() || undefined,
           next: nextPath,
         }),
@@ -196,14 +221,39 @@ function SignupContent() {
               className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
             />
             {accountType === "agent" ? (
-              <input
-                type="text"
-                required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Agency / company name *"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
-              />
+              <>
+                <input
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Agency / company name *"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
+                />
+                <input
+                  type="text"
+                  required
+                  value={governmentId}
+                  onChange={(e) => setGovernmentId(e.target.value)}
+                  placeholder="Government ID (PAN / Registration) *"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
+                />
+                <input
+                  type="text"
+                  required
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
+                  placeholder="Tax ID (GST) *"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
+                />
+                <input
+                  type="text"
+                  value={officeAddress}
+                  onChange={(e) => setOfficeAddress(e.target.value)}
+                  placeholder="Office address"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-[#199ce0] focus:ring-2 focus:ring-[#199ce0]/20"
+                />
+              </>
             ) : null}
             <input
               type="text"
@@ -294,4 +344,3 @@ export default function SignupPage() {
     </Suspense>
   );
 }
-

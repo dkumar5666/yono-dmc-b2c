@@ -20,8 +20,6 @@ const HIDE_CHROME_PREFIXES = [
   "/admin",
   "/supplier/login",
   "/agent/login",
-  "/official-login",
-  "/official/login",
 ];
 
 function shouldHideChrome(pathname: string): boolean {

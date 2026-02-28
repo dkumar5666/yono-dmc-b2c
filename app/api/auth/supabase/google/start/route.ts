@@ -50,6 +50,9 @@ export async function GET(req: Request) {
   const nextPath = sanitizeNextPath(requestUrl.searchParams.get("next"));
   const fullName = shortText(requestUrl.searchParams.get("full_name"), 120);
   const companyName = shortText(requestUrl.searchParams.get("company_name"), 160);
+  const governmentId = shortText(requestUrl.searchParams.get("government_id"), 120);
+  const taxId = shortText(requestUrl.searchParams.get("tax_id"), 120);
+  const officeAddress = shortText(requestUrl.searchParams.get("office_address"), 250);
   const city = shortText(requestUrl.searchParams.get("city"), 80);
 
   const state = randomState();
@@ -71,6 +74,9 @@ export async function GET(req: Request) {
     role,
     fullName,
     companyName,
+    governmentId,
+    taxId,
+    officeAddress,
     city,
   });
 

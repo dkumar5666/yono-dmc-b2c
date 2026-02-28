@@ -90,6 +90,9 @@ export async function GET(req: Request) {
       phone: tokenPayload.user?.phone,
       fullName: context.fullName || safeUserName(tokenPayload.user),
       companyName: context.companyName,
+      governmentId: context.governmentId,
+      taxId: context.taxId,
+      officeAddress: context.officeAddress,
       city: context.city,
     });
 

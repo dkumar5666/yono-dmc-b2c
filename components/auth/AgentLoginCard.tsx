@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { MailCheck, Smartphone } from "lucide-react";
 
@@ -264,6 +265,15 @@ export default function AgentLoginCard() {
           {success}
         </div>
       ) : null}
+
+      <div className="mt-5 text-sm">
+        <Link
+          href={`/signup?role=agent&next=${encodeURIComponent(nextPath)}`}
+          className="font-semibold text-sky-600 hover:text-sky-700"
+        >
+          Need an agent account? Create account
+        </Link>
+      </div>
     </div>
   );
 }

@@ -22,6 +22,9 @@ interface OAuthContextPayload {
   role?: IdentityRole;
   fullName?: string;
   companyName?: string;
+  governmentId?: string;
+  taxId?: string;
+  officeAddress?: string;
   city?: string;
   exp: number;
 }
@@ -31,6 +34,9 @@ interface OtpContextPayload {
   role?: IdentityRole;
   fullName?: string;
   companyName?: string;
+  governmentId?: string;
+  taxId?: string;
+  officeAddress?: string;
   city?: string;
   nextPath: string;
   provider: "supabase_phone" | "twilio_verify";
@@ -241,6 +247,9 @@ export function applyOAuthContextCookie(
     role?: IdentityRole;
     fullName?: string;
     companyName?: string;
+    governmentId?: string;
+    taxId?: string;
+    officeAddress?: string;
     city?: string;
   }
 ): void {
@@ -251,6 +260,9 @@ export function applyOAuthContextCookie(
     role: context.role,
     fullName: context.fullName,
     companyName: context.companyName,
+    governmentId: context.governmentId,
+    taxId: context.taxId,
+    officeAddress: context.officeAddress,
     city: context.city,
     exp: Date.now() + 10 * 60 * 1000,
   };

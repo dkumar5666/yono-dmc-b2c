@@ -17,11 +17,17 @@ import {
 } from "@/lib/auth/twilioVerifyFallback";
 import { getRequestId, safeLog } from "@/lib/system/requestContext";
 
+const OTP_UNAVAILABLE_MESSAGE =
+  "OTP service temporarily unavailable, please try Google login or retry in 2 minutes.";
+
 interface SendOtpBody {
   phone?: string;
   role?: string;
   fullName?: string;
   companyName?: string;
+  governmentId?: string;
+  taxId?: string;
+  officeAddress?: string;
   city?: string;
   next?: string;
 }
@@ -117,6 +123,9 @@ export async function POST(req: Request) {
       role,
       fullName: body.fullName?.trim() || undefined,
       companyName: body.companyName?.trim() || undefined,
+      governmentId: body.governmentId?.trim() || undefined,
+      taxId: body.taxId?.trim() || undefined,
+      officeAddress: body.officeAddress?.trim() || undefined,
       city: body.city?.trim() || undefined,
       nextPath,
       provider,
@@ -157,7 +166,7 @@ export async function POST(req: Request) {
         req,
         503,
         "supabase_auth_not_configured",
-        "Supabase Auth is not configured."
+        OTP_UNAVAILABLE_MESSAGE
       );
     }
 
@@ -166,16 +175,28 @@ export async function POST(req: Request) {
         error.status === 400 || error.status === 422
           ? "otp_provider_unavailable"
           : "otp_send_failed";
-      return apiError(req, error.status >= 500 ? 502 : 400, mappedCode, error.message);
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 400,
+        mappedCode,
+        mappedCode === "otp_provider_unavailable"
+          ? OTP_UNAVAILABLE_MESSAGE
+          : error.message
+      );
     }
 
     if (error instanceof TwilioVerifyUnavailableError) {
-      return apiError(req, 503, "otp_provider_unavailable", error.message);
+      return apiError(req, 503, "otp_provider_unavailable", OTP_UNAVAILABLE_MESSAGE);
     }
 
     if (error instanceof TwilioVerifyRequestError) {
       const code = error.status === 400 || error.status === 404 ? "otp_send_failed" : "otp_provider_unavailable";
-      return apiError(req, error.status >= 500 ? 502 : 400, code, error.message);
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 400,
+        code,
+        code === "otp_provider_unavailable" ? OTP_UNAVAILABLE_MESSAGE : error.message
+      );
     }
 
     return apiError(req, 500, "otp_send_failed", "Failed to send OTP.");

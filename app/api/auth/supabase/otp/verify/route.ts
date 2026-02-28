@@ -18,6 +18,10 @@ import {
   verifyOtpWithTwilio,
 } from "@/lib/auth/twilioVerifyFallback";
 import { getRequestId, safeLog } from "@/lib/system/requestContext";
+import { recordAnalyticsEvent } from "@/lib/system/opsTelemetry";
+
+const OTP_UNAVAILABLE_MESSAGE =
+  "OTP service temporarily unavailable, please try Google login or retry in 2 minutes.";
 
 interface VerifyOtpBody {
   phone?: string;
@@ -89,6 +93,9 @@ export async function POST(req: Request) {
       role: context.role,
       fullName: context.fullName,
       companyName: context.companyName,
+      governmentId: context.governmentId,
+      taxId: context.taxId,
+      officeAddress: context.officeAddress,
       city: context.city,
       email: tokenPayload.user?.email,
       phone: tokenPayload.user?.phone || phone,
@@ -120,6 +127,14 @@ export async function POST(req: Request) {
       },
       req
     );
+    await recordAnalyticsEvent({
+      event: "login_success",
+      source: context.provider === "twilio_verify" ? "mobile_otp_twilio" : "mobile_otp",
+      status: "success",
+      meta: {
+        role: profile?.role || "customer",
+      },
+    });
 
     return response;
   } catch (error) {
@@ -144,23 +159,33 @@ export async function POST(req: Request) {
         req,
         503,
         "supabase_auth_not_configured",
-        "Supabase Auth is not configured."
+        OTP_UNAVAILABLE_MESSAGE
       );
     }
 
     if (error instanceof SupabaseAuthRequestError) {
       const code =
         error.status === 400 || error.status === 422 ? "otp_invalid" : "otp_provider_unavailable";
-      return apiError(req, error.status >= 500 ? 502 : 401, code, error.message);
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 401,
+        code,
+        code === "otp_provider_unavailable" ? OTP_UNAVAILABLE_MESSAGE : error.message
+      );
     }
 
     if (error instanceof TwilioVerifyUnavailableError) {
-      return apiError(req, 503, "otp_provider_unavailable", error.message);
+      return apiError(req, 503, "otp_provider_unavailable", OTP_UNAVAILABLE_MESSAGE);
     }
 
     if (error instanceof TwilioVerifyRequestError) {
       const code = error.status === 400 || error.status === 404 ? "otp_invalid" : "otp_provider_unavailable";
-      return apiError(req, error.status >= 500 ? 502 : 401, code, error.message);
+      return apiError(
+        req,
+        error.status >= 500 ? 502 : 401,
+        code,
+        code === "otp_provider_unavailable" ? OTP_UNAVAILABLE_MESSAGE : error.message
+      );
     }
 
     return apiError(req, 500, "otp_invalid", "Failed to verify OTP.");
