@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vercel/analytics": "^1.6.1",
     "amadeus": "^11.0.0",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
