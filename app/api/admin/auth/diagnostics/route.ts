@@ -48,8 +48,8 @@ export async function GET(req: Request) {
     routes: {
       googleStart: "/api/auth/supabase/google/start",
       googleCallback: "/auth/callback",
-      otpSend: "/api/auth/supabase/otp/send",
-      otpVerify: "/api/auth/supabase/otp/verify",
+      otpSend: "/api/auth/otp/send",
+      otpVerify: "/api/auth/otp/verify",
       legacyGoogleStart: "/api/customer-auth/google/start",
       legacyGoogleCallback: "/api/customer-auth/google/callback",
       legacyOtpSend: "/api/customer-auth/otp/send",

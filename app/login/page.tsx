@@ -20,6 +20,7 @@ interface OtpVerifySuccess {
     verified?: boolean;
     role?: string;
     nextPath?: string;
+    redirectTo?: string;
   };
 }
 
@@ -62,6 +63,7 @@ function LoginContent() {
   const [otp, setOtp] = useState("");
   const [otpMode, setOtpMode] = useState<"mobile" | "email">("mobile");
   const [otpSent, setOtpSent] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [meChecked, setMeChecked] = useState(false);
   const [mustVerifyPhone, setMustVerifyPhone] = useState(false);
@@ -85,6 +87,14 @@ function LoginContent() {
     if (!oauthErrorMessage) return;
     setError(oauthErrorMessage);
   }, [oauthErrorMessage]);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCountdown((value) => (value > 0 ? value - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCountdown]);
 
   useEffect(() => {
     void (async () => {
@@ -138,8 +148,31 @@ function LoginContent() {
     setOtpMode(mode);
     setOtpSent(false);
     setOtp("");
+    setResendCountdown(0);
     setError(null);
     setMessage(null);
+  }
+
+  async function sendMobileOtpRequest() {
+    const response = await fetch("/api/auth/otp/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone,
+        country: "IN",
+        channel: "sms",
+      }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as ApiErrorShape & {
+      data?: { cooldownSeconds?: number };
+    };
+    if (!response.ok) {
+      throw new Error(readErrorMessage(payload, "Failed to send OTP"));
+    }
+    const cooldownSeconds = Number(payload?.data?.cooldownSeconds || 60);
+    setOtpSent(true);
+    setResendCountdown(Number.isFinite(cooldownSeconds) && cooldownSeconds > 0 ? cooldownSeconds : 60);
+    setMessage("OTP sent. Enter the verification code.");
   }
 
   async function onSendMobileOtp(e: FormEvent) {
@@ -148,22 +181,23 @@ function LoginContent() {
     setMessage(null);
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/supabase/otp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone,
-          next: nextPath,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as ApiErrorShape;
-      if (!response.ok) {
-        throw new Error(readErrorMessage(payload, "Failed to send OTP"));
-      }
-      setOtpSent(true);
-      setMessage("OTP sent. Enter the verification code.");
+      await sendMobileOtpRequest();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send OTP");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onResendMobileOtp() {
+    if (resendCountdown > 0 || loading) return;
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+    try {
+      await sendMobileOtpRequest();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resend OTP");
     } finally {
       setLoading(false);
     }
@@ -175,19 +209,20 @@ function LoginContent() {
     setMessage(null);
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/supabase/otp/verify", {
+      const response = await fetch("/api/auth/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone,
-          token: otp,
+          code: otp,
+          next: nextPath,
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as OtpVerifySuccess & ApiErrorShape;
       if (!response.ok) {
         throw new Error(readErrorMessage(payload, "OTP verification failed"));
       }
-      const next = payload.data?.nextPath || nextPath || "/my-trips";
+      const next = payload.data?.redirectTo || payload.data?.nextPath || nextPath || "/account";
       window.location.href = next;
     } catch (err) {
       setError(err instanceof Error ? err.message : "OTP verification failed");
@@ -441,6 +476,16 @@ function LoginContent() {
                         ? "Send OTP"
                         : "Send Email OTP"}
                 </button>
+                {otpMode === "mobile" && otpSent ? (
+                  <button
+                    type="button"
+                    onClick={() => void onResendMobileOtp()}
+                    disabled={loading || resendCountdown > 0}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {resendCountdown > 0 ? `Resend OTP in ${resendCountdown}s` : "Resend OTP"}
+                  </button>
+                ) : null}
               </form>
 
               <p className="mt-2 text-xs text-slate-500">
