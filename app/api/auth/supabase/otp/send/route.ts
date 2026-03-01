@@ -172,16 +172,20 @@ export async function POST(req: Request) {
 
     if (error instanceof SupabaseAuthRequestError) {
       const mappedCode =
-        error.status === 400 || error.status === 422
+        error.status === 400 ||
+        error.status === 401 ||
+        error.status === 403 ||
+        error.status === 422 ||
+        error.status >= 500
           ? "otp_provider_unavailable"
           : "otp_send_failed";
       return apiError(
         req,
-        error.status >= 500 ? 502 : 400,
+        mappedCode === "otp_provider_unavailable" ? 503 : 400,
         mappedCode,
         mappedCode === "otp_provider_unavailable"
           ? OTP_UNAVAILABLE_MESSAGE
-          : error.message
+          : "Failed to send OTP. Please retry."
       );
     }
 
@@ -190,12 +194,13 @@ export async function POST(req: Request) {
     }
 
     if (error instanceof TwilioVerifyRequestError) {
-      const code = error.status === 400 || error.status === 404 ? "otp_send_failed" : "otp_provider_unavailable";
+      const code =
+        error.status === 400 || error.status === 404 ? "otp_send_failed" : "otp_provider_unavailable";
       return apiError(
         req,
-        error.status >= 500 ? 502 : 400,
+        code === "otp_provider_unavailable" ? 503 : 400,
         code,
-        code === "otp_provider_unavailable" ? OTP_UNAVAILABLE_MESSAGE : error.message
+        code === "otp_provider_unavailable" ? OTP_UNAVAILABLE_MESSAGE : "Failed to send OTP. Please retry."
       );
     }
 

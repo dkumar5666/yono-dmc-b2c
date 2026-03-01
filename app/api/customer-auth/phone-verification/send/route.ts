@@ -20,9 +20,8 @@ interface SendPhoneVerifyOtpBody {
   phone?: string;
 }
 
-function safeString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
+const OTP_UNAVAILABLE_MESSAGE =
+  "OTP service temporarily unavailable, please try again in 2 minutes or use Email OTP.";
 
 export async function POST(req: Request) {
   const requestId = getRequestId(req);
@@ -116,15 +115,16 @@ export async function POST(req: Request) {
         req,
         503,
         "otp_provider_unavailable",
-        "OTP service temporarily unavailable, please try Google login or retry in 2 minutes."
+        OTP_UNAVAILABLE_MESSAGE
       );
     }
     if (error instanceof SupabaseAuthRequestError) {
+      const providerDown = error.status === 401 || error.status === 403 || error.status >= 500;
       return apiError(
         req,
-        error.status >= 500 ? 502 : 400,
-        "otp_send_failed",
-        safeString(error.message) || "Failed to send OTP."
+        providerDown ? 503 : 400,
+        providerDown ? "otp_provider_unavailable" : "otp_send_failed",
+        providerDown ? OTP_UNAVAILABLE_MESSAGE : "Failed to send OTP. Please retry."
       );
     }
     if (error instanceof TwilioVerifyUnavailableError) {
@@ -132,15 +132,16 @@ export async function POST(req: Request) {
         req,
         503,
         "otp_provider_unavailable",
-        "OTP service temporarily unavailable, please try Google login or retry in 2 minutes."
+        OTP_UNAVAILABLE_MESSAGE
       );
     }
     if (error instanceof TwilioVerifyRequestError) {
+      const providerDown = error.status === 401 || error.status === 403 || error.status >= 500;
       return apiError(
         req,
-        error.status >= 500 ? 502 : 400,
-        "otp_send_failed",
-        safeString(error.message) || "Failed to send OTP."
+        providerDown ? 503 : 400,
+        providerDown ? "otp_provider_unavailable" : "otp_send_failed",
+        providerDown ? OTP_UNAVAILABLE_MESSAGE : "Failed to send OTP. Please retry."
       );
     }
     return apiError(req, 500, "otp_send_failed", "Failed to send OTP.");
