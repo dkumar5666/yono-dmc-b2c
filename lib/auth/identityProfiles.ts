@@ -190,6 +190,25 @@ export async function getIdentityProfileByUserId(userId: string): Promise<Identi
   }
 }
 
+export async function getIdentityProfileByEmail(email: string): Promise<IdentityProfile | null> {
+  const ref = safeString(email).toLowerCase();
+  if (!ref) return null;
+  try {
+    const db = new SupabaseRestClient();
+    const profile = await db.selectSingle<GenericRow>(
+      "profiles",
+      new URLSearchParams({
+        select: "id,role,full_name,email,phone,company_name,city,country,status",
+        email: `ilike.${ref}`,
+      })
+    );
+    return toProfile(profile);
+  } catch (error) {
+    if (error instanceof SupabaseNotConfiguredError) return null;
+    return null;
+  }
+}
+
 export async function ensureIdentityProfile(input: {
   userId: string;
   email?: string;

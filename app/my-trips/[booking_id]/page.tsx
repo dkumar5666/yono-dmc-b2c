@@ -70,9 +70,6 @@ export default async function MyTripDetailPage({
   if (!session) {
     redirect(`/login?next=${encodeURIComponent(`/my-trips/${bookingParam}`)}`);
   }
-  if (session.provider === "supabase" && !session.phone) {
-    redirect(`/login?next=${encodeURIComponent(`/my-trips/${bookingParam}`)}&require_mobile_otp=1`);
-  }
   if (session.provider === "supabase") {
     const profileCompleted = await getCustomerProfileCompletionStatus(session.id);
     if (!profileCompleted) {

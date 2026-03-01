@@ -50,9 +50,6 @@ export default async function MyTripsPage() {
   if (!session) {
     redirect("/login?next=%2Fmy-trips");
   }
-  if (session.provider === "supabase" && !session.phone) {
-    redirect("/login?next=%2Fmy-trips&require_mobile_otp=1");
-  }
   if (session.provider === "supabase") {
     const profileCompleted = await getCustomerProfileCompletionStatus(session.id);
     if (!profileCompleted) {

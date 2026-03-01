@@ -26,19 +26,11 @@ interface OtpVerifySuccess {
 interface MeSuccessShape {
   ok?: true;
   data?: {
-    user?: {
-      id?: string;
-      name?: string;
-      email?: string;
-      phone?: string;
-      role?: string;
-    };
-    needs_phone_verification?: boolean;
     profile_completed?: boolean;
   };
 }
 
-type LoginView = "entry" | "email_verify" | "google_phone";
+type LoginView = "entry" | "email_verify" | "password";
 
 function readErrorMessage(payload: unknown, fallback: string): string {
   const row = payload as ApiErrorShape | null;
@@ -55,7 +47,6 @@ function sanitizeNextPath(nextPath: string | null): string {
 function LoginContent() {
   const searchParams = useSearchParams();
   const nextPath = sanitizeNextPath(searchParams.get("next"));
-  const requiresPhoneVerificationParam = searchParams.get("require_mobile_otp") === "1";
   const supportWhatsAppUrl =
     process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_URL?.trim() || "https://wa.me/919958839319";
   const oauthError = searchParams.get("error");
@@ -63,14 +54,9 @@ function LoginContent() {
   const [view, setView] = useState<LoginView>("entry");
   const [email, setEmail] = useState("");
   const [emailOtp, setEmailOtp] = useState("");
-  const [phone, setPhone] = useState("");
-  const [phoneOtp, setPhoneOtp] = useState("");
-  const [googlePhoneOtpSent, setGooglePhoneOtpSent] = useState(false);
-
+  const [password, setPassword] = useState("");
   const [resendCountdown, setResendCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [meChecked, setMeChecked] = useState(false);
-  const [mustVerifyPhone, setMustVerifyPhone] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +68,7 @@ function LoginContent() {
       google_provider_error: "Google login was cancelled or failed.",
       google_token_exchange_failed: "Google token exchange failed. Please retry.",
       google_auth_failed: "Google login failed. Please retry.",
+      google_account_not_registered: "This Google account is not registered. Please create an account first.",
       supabase_auth_not_configured: "Supabase Auth is not configured yet.",
     };
     return map[oauthError] || "Login failed. Please try again.";
@@ -104,45 +91,19 @@ function LoginContent() {
     void (async () => {
       try {
         const response = await fetch("/api/customer-auth/me", { cache: "no-store" });
-        if (response.ok) {
-          const payload = (await response.json().catch(() => ({}))) as MeSuccessShape;
-          const needsPhoneVerification = Boolean(payload?.data?.needs_phone_verification);
-          const profileCompleted = Boolean(payload?.data?.profile_completed);
+        if (!response.ok) return;
 
-          if (requiresPhoneVerificationParam || needsPhoneVerification) {
-            setMustVerifyPhone(true);
-            setView("google_phone");
-            const existingPhone = payload?.data?.user?.phone || "";
-            if (existingPhone) setPhone(existingPhone);
-            return;
-          }
-
-          if (!profileCompleted) {
-            window.location.href = "/account/onboarding";
-          } else {
-            window.location.href = nextPath;
-          }
+        const payload = (await response.json().catch(() => ({}))) as MeSuccessShape;
+        if (!payload?.data?.profile_completed) {
+          window.location.href = "/account/onboarding";
           return;
         }
-
-        if (requiresPhoneVerificationParam) {
-          setError("Google session expired. Click Continue with Google again.");
-          const cleaned = new URL(window.location.href);
-          cleaned.searchParams.delete("require_mobile_otp");
-          window.history.replaceState({}, "", cleaned.toString());
-        }
+        window.location.href = nextPath;
       } catch {
-        if (requiresPhoneVerificationParam) {
-          setError("Google session expired. Click Continue with Google again.");
-          const cleaned = new URL(window.location.href);
-          cleaned.searchParams.delete("require_mobile_otp");
-          window.history.replaceState({}, "", cleaned.toString());
-        }
-      } finally {
-        setMeChecked(true);
+        // ignore
       }
     })();
-  }, [nextPath, requiresPhoneVerificationParam]);
+  }, [nextPath]);
 
   async function onGoogleLogin() {
     setError(null);
@@ -155,7 +116,7 @@ function LoginContent() {
     const response = await fetch("/api/auth/supabase/email-otp/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, next: nextPath }),
+      body: JSON.stringify({ email, next: nextPath, intent: "login" }),
     });
     const payload = (await response.json().catch(() => ({}))) as ApiErrorShape;
     if (!response.ok) {
@@ -205,14 +166,14 @@ function LoginContent() {
       const response = await fetch("/api/auth/supabase/email-otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, token: emailOtp, next: nextPath }),
+        body: JSON.stringify({ email, token: emailOtp, next: nextPath, intent: "login" }),
       });
       const payload = (await response.json().catch(() => ({}))) as OtpVerifySuccess & ApiErrorShape;
       if (!response.ok) {
         throw new Error(readErrorMessage(payload, "Email OTP verification failed"));
       }
 
-      const next = payload.data?.nextPath || payload.data?.redirectTo || nextPath || "/account/onboarding";
+      const next = payload.data?.nextPath || payload.data?.redirectTo || nextPath || "/my-trips";
       window.location.href = next;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Email OTP verification failed");
@@ -221,79 +182,33 @@ function LoginContent() {
     }
   }
 
-  async function sendGooglePhoneOtp() {
-    const response = await fetch("/api/customer-auth/phone-verification/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone }),
-    });
-    const payload = (await response.json().catch(() => ({}))) as ApiErrorShape;
-    if (!response.ok) {
-      throw new Error(readErrorMessage(payload, "Failed to send OTP"));
-    }
-
-    setGooglePhoneOtpSent(true);
-    setResendCountdown(60);
-    setMessage("OTP sent. Enter the verification code.");
-  }
-
-  async function onSendGooglePhoneOtp(e: FormEvent) {
+  async function onPasswordLogin(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setMessage(null);
     setLoading(true);
 
     try {
-      await sendGooglePhoneOtp();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send OTP");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onResendGooglePhoneOtp() {
-    if (resendCountdown > 0 || loading) return;
-    setError(null);
-    setMessage(null);
-    setLoading(true);
-
-    try {
-      await sendGooglePhoneOtp();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to resend OTP");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onVerifyPhoneAfterGoogle(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setMessage(null);
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/customer-auth/phone-verification/verify", {
+      const response = await fetch("/api/auth/supabase/password/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, otp: phoneOtp }),
+        body: JSON.stringify({
+          email,
+          password,
+          expectedRole: "customer",
+        }),
       });
       const payload = (await response.json().catch(() => ({}))) as ApiErrorShape;
       if (!response.ok) {
-        throw new Error(readErrorMessage(payload, "OTP verification failed"));
+        throw new Error(readErrorMessage(payload, "Invalid email or password."));
       }
-      window.location.href = "/account/onboarding";
+      window.location.href = nextPath;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "OTP verification failed");
+      setError(err instanceof Error ? err.message : "Login failed.");
     } finally {
       setLoading(false);
     }
   }
-
-  const showPhoneVerificationStep = mustVerifyPhone && view === "google_phone";
-  const showEmailEntry = !showPhoneVerificationStep && view === "entry";
-  const showEmailVerify = !showPhoneVerificationStep && view === "email_verify";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100">
@@ -306,135 +221,146 @@ function LoginContent() {
 
         <div className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-7 shadow-sm sm:p-8">
           <h1 className="text-[34px] font-semibold tracking-tight text-slate-900">
-            {showEmailVerify ? "Let's confirm your email" : "Customer Login"}
+            {view === "email_verify" ? "Let's confirm your email" : view === "password" ? "Sign in with password" : "Customer Login"}
           </h1>
+
           <p className="mt-2 text-sm text-slate-600">
-            {showPhoneVerificationStep
-              ? "Google login is complete. Verify your mobile OTP to continue."
-              : showEmailVerify
-                ? `Enter the secure code sent to ${email}. Check junk mail if it&apos;s not in your inbox.`
+            {view === "email_verify"
+              ? `Enter the secure code sent to ${email}. Check junk mail if it&apos;s not in your inbox.`
+              : view === "password"
+                ? "Use your registered email and password to sign in."
                 : "Sign in with Google or email OTP to view your trips, payments, and documents."}
           </p>
 
-          {showPhoneVerificationStep ? (
-            <form
-              onSubmit={googlePhoneOtpSent ? onVerifyPhoneAfterGoogle : onSendGooglePhoneOtp}
-              className="mt-6 space-y-3"
-            >
-              <input
-                type="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Mobile number (+91...)"
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563d7] focus:ring-2 focus:ring-[#2563d7]/20"
-              />
-              {googlePhoneOtpSent ? (
+          {view === "entry" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void onGoogleLogin()}
+                className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-lg bg-[#2563d7] px-4 py-3 font-semibold text-white hover:bg-[#1d4fc2]"
+              >
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white font-bold text-[#2563d7]">
+                  G
+                </span>
+                Continue with Google
+              </button>
+
+              <div className="my-5 flex items-center gap-3 text-sm text-slate-500">
+                <span className="h-px flex-1 bg-slate-200" />
+                or
+                <span className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              <form onSubmit={onSendEmailOtp} className="space-y-3">
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={phoneOtp}
-                  onChange={(e) => setPhoneOtp(e.target.value)}
-                  placeholder="6-digit OTP"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563d7] focus:ring-2 focus:ring-[#2563d7]/20"
                 />
-              ) : null}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex w-full items-center justify-center rounded-full bg-[#2563d7] px-4 py-3 font-semibold text-white hover:bg-[#1d4fc2] disabled:opacity-60"
+                >
+                  {loading ? "Please wait..." : "Continue with Email OTP"}
+                </button>
+              </form>
+
+              <button
+                type="button"
+                onClick={() => setView("password")}
+                className="mt-4 w-full text-sm font-semibold text-[#2563d7] hover:underline"
+              >
+                Sign in with password instead
+              </button>
+
+              <Link
+                href={`/signup?next=${encodeURIComponent(nextPath)}`}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-[#2563d7] px-4 py-3 text-sm font-semibold text-[#2563d7] hover:bg-[#2563d7]/5"
+              >
+                Create account
+              </Link>
+            </>
+          ) : null}
+
+          {view === "email_verify" ? (
+            <form onSubmit={onVerifyEmailOtp} className="mt-6 space-y-3">
+              <input
+                type="text"
+                required
+                value={emailOtp}
+                onChange={(e) => setEmailOtp(e.target.value)}
+                placeholder="6-digit code"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563d7] focus:ring-2 focus:ring-[#2563d7]/20"
+              />
               <button
                 type="submit"
-                disabled={loading || !meChecked}
+                disabled={loading}
                 className="inline-flex w-full items-center justify-center rounded-full bg-[#2563d7] px-4 py-3 font-semibold text-white hover:bg-[#1d4fc2] disabled:opacity-60"
               >
-                {loading ? "Please wait..." : googlePhoneOtpSent ? "Verify OTP" : "Send Mobile OTP"}
+                {loading ? "Please wait..." : "Continue"}
               </button>
-              {googlePhoneOtpSent ? (
+              {resendCountdown > 0 ? (
+                <p className="pt-1 text-center text-sm text-slate-600">
+                  Didn&apos;t receive a code? You can request another code in {resendCountdown}s
+                </p>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => void onResendGooglePhoneOtp()}
-                  disabled={loading || resendCountdown > 0}
-                  className="w-full rounded-full border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  onClick={() => void onResendEmailOtp()}
+                  disabled={loading}
+                  className="w-full text-sm font-semibold text-[#2563d7] hover:underline disabled:opacity-60"
                 >
-                  {resendCountdown > 0 ? `Resend OTP in ${resendCountdown}s` : "Resend OTP"}
+                  Resend code
                 </button>
-              ) : null}
+              )}
+              <button
+                type="button"
+                onClick={() => setView("entry")}
+                className="w-full text-sm font-medium text-slate-500 hover:underline"
+              >
+                Back
+              </button>
             </form>
-          ) : (
-            <>
-              {showEmailEntry ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void onGoogleLogin()}
-                    className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-lg bg-[#2563d7] px-4 py-3 font-semibold text-white hover:bg-[#1d4fc2]"
-                  >
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white font-bold text-[#2563d7]">
-                      G
-                    </span>
-                    Continue with Google
-                  </button>
+          ) : null}
 
-                  <div className="my-5 flex items-center gap-3 text-sm text-slate-500">
-                    <span className="h-px flex-1 bg-slate-200" />
-                    or
-                    <span className="h-px flex-1 bg-slate-200" />
-                  </div>
-                </>
-              ) : null}
-
-              {showEmailEntry ? (
-                <form onSubmit={onSendEmailOtp} className="space-y-3">
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563d7] focus:ring-2 focus:ring-[#2563d7]/20"
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex w-full items-center justify-center rounded-full bg-[#2563d7] px-4 py-3 font-semibold text-white hover:bg-[#1d4fc2] disabled:opacity-60"
-                  >
-                    {loading ? "Please wait..." : "Continue"}
-                  </button>
-                </form>
-              ) : null}
-
-              {showEmailVerify ? (
-                <form onSubmit={onVerifyEmailOtp} className="mt-6 space-y-3">
-                  <input
-                    type="text"
-                    required
-                    value={emailOtp}
-                    onChange={(e) => setEmailOtp(e.target.value)}
-                    placeholder="6-digit code"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563d7] focus:ring-2 focus:ring-[#2563d7]/20"
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex w-full items-center justify-center rounded-full bg-[#2563d7] px-4 py-3 font-semibold text-white hover:bg-[#1d4fc2] disabled:opacity-60"
-                  >
-                    {loading ? "Please wait..." : "Continue"}
-                  </button>
-                  {resendCountdown > 0 ? (
-                    <p className="pt-1 text-center text-sm text-slate-600">
-                      Didn&apos;t receive a code? You can request another code in {resendCountdown}s
-                    </p>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void onResendEmailOtp()}
-                      disabled={loading}
-                      className="w-full text-sm font-semibold text-[#2563d7] hover:underline disabled:opacity-60"
-                    >
-                      Resend code
-                    </button>
-                  )}
-                </form>
-              ) : null}
-            </>
-          )}
+          {view === "password" ? (
+            <form onSubmit={onPasswordLogin} className="mt-6 space-y-3">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563d7] focus:ring-2 focus:ring-[#2563d7]/20"
+              />
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-[#2563d7] focus:ring-2 focus:ring-[#2563d7]/20"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex w-full items-center justify-center rounded-full bg-[#2563d7] px-4 py-3 font-semibold text-white hover:bg-[#1d4fc2] disabled:opacity-60"
+              >
+                {loading ? "Please wait..." : "Sign in"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("entry")}
+                className="w-full text-sm font-medium text-slate-500 hover:underline"
+              >
+                Back to email OTP
+              </button>
+            </form>
+          ) : null}
 
           {error ? (
             <p className="mt-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>

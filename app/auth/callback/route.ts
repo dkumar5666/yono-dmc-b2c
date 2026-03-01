@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPublicBaseUrl } from "@/lib/auth/baseUrl";
-import { ensureIdentityProfile } from "@/lib/auth/identityProfiles";
+import { ensureIdentityProfile, getIdentityProfileByUserId } from "@/lib/auth/identityProfiles";
 import {
   applySupabaseSessionCookie,
   clearOAuthContextCookie,
@@ -83,6 +83,11 @@ export async function GET(req: Request) {
       return loginErrorRedirect(baseUrl, "google_token_exchange_failed", requestId);
     }
 
+    const existingProfile = await getIdentityProfileByUserId(userId);
+    if (!existingProfile && (!context.role || context.role === "customer")) {
+      return loginErrorRedirect(baseUrl, "google_account_not_registered", requestId);
+    }
+
     const profile = await ensureIdentityProfile({
       userId,
       role: context.role,
@@ -106,10 +111,7 @@ export async function GET(req: Request) {
       }
     }
     const resolvedPhone = tokenPayload.user?.phone || profile?.phone || undefined;
-    const requiresPhoneVerification = resolvedRole === "customer" && !resolvedPhone;
-    const redirectPath = requiresPhoneVerification
-      ? `/login?next=${encodeURIComponent(targetPath)}&require_mobile_otp=1`
-      : targetPath;
+    const redirectPath = targetPath;
 
     const response = NextResponse.redirect(`${baseUrl}${redirectPath}`);
     response.headers.set("x-request-id", requestId);
@@ -129,7 +131,6 @@ export async function GET(req: Request) {
         route: "/auth/callback",
         outcome: "success",
         role: resolvedRole,
-        requiresPhoneVerification,
       },
       req
     );

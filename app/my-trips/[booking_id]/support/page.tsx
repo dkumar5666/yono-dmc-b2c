@@ -45,9 +45,6 @@ export default async function MyTripSupportPage({
   if (!session) {
     redirect(`/login?next=${encodeURIComponent(`${bookingHref}/support`)}`);
   }
-  if (session.provider === "supabase" && !session.phone) {
-    redirect(`/login?next=${encodeURIComponent(`${bookingHref}/support`)}&require_mobile_otp=1`);
-  }
 
   const detail = await getCustomerTripDetail(session, bookingParam);
   if (!detail.booking) {

@@ -2,6 +2,7 @@ import { apiError, apiSuccess } from "@/lib/backend/http";
 import { sendEmailOtp, SupabaseAuthRequestError, SupabaseAuthUnavailableError } from "@/lib/auth/supabaseAuthProvider";
 import { getRequestId, safeLog } from "@/lib/system/requestContext";
 import { sanitizeNextPath } from "@/lib/auth/supabaseSession";
+import { getIdentityProfileByEmail } from "@/lib/auth/identityProfiles";
 
 const OTP_UNAVAILABLE_MESSAGE =
   "OTP service temporarily unavailable, please try Google login or retry in 2 minutes.";
@@ -9,6 +10,7 @@ const OTP_UNAVAILABLE_MESSAGE =
 interface SendEmailOtpBody {
   email?: string;
   next?: string;
+  intent?: "login" | "signup";
 }
 
 function normalizeEmail(value: string | undefined): string {
@@ -25,6 +27,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as SendEmailOtpBody;
     const email = normalizeEmail(body.email);
     const nextPath = sanitizeNextPath(body.next);
+    const intent = body.intent === "signup" ? "signup" : "login";
 
     safeLog(
       "auth.supabase.email_otp.send.requested",
@@ -32,6 +35,7 @@ export async function POST(req: Request) {
         requestId,
         route: "/api/auth/supabase/email-otp/send",
         hasNext: Boolean(nextPath),
+        intent,
       },
       req
     );
@@ -41,6 +45,25 @@ export async function POST(req: Request) {
     }
     if (!isValidEmail(email)) {
       return apiError(req, 400, "invalid_email", "Enter a valid email address.");
+    }
+
+    const existingProfile = await getIdentityProfileByEmail(email);
+    const existingCustomer = existingProfile?.role === "customer";
+    if (intent === "login" && !existingCustomer) {
+      return apiError(
+        req,
+        404,
+        "account_not_found",
+        "No customer account found for this email. Please create an account first."
+      );
+    }
+    if (intent === "signup" && existingCustomer) {
+      return apiError(
+        req,
+        409,
+        "account_exists",
+        "An account already exists with this email. Please sign in."
+      );
     }
 
     await sendEmailOtp({ email });
@@ -89,4 +112,3 @@ export async function POST(req: Request) {
     return apiError(req, 500, "otp_send_failed", "Failed to send email OTP.");
   }
 }
-

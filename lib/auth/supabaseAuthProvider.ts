@@ -272,3 +272,18 @@ export async function verifyEmailOtp(params: {
     type: "email",
   });
 }
+
+export async function setAuthUserPassword(params: {
+  userId: string;
+  password: string;
+}): Promise<void> {
+  await authAdminRequest<Record<string, unknown>>(
+    `/admin/users/${encodeURIComponent(params.userId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        password: params.password,
+      }),
+    }
+  );
+}

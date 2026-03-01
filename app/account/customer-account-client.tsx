@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Bell, CheckCircle2, CreditCard, FileText, Gift, Loader2, Shield, UserCircle2, Users } from "lucide-react";
 
 type Profile = {
@@ -34,17 +35,22 @@ type Wallet = {
   tier: string;
 };
 
-const SIDEBAR_ITEMS = [
-  "Profile",
-  "My Trips",
-  "Wallet & Credits",
-  "Travellers",
-  "Documents",
-  "Rewards",
-  "Notifications",
-  "Support",
-  "Security",
-  "Logout",
+type SidebarItem =
+  | { label: string; type: "section"; target: string }
+  | { label: string; type: "route"; href: string }
+  | { label: string; type: "action"; action: "logout" };
+
+const SIDEBAR_ITEMS: SidebarItem[] = [
+  { label: "Profile", type: "section", target: "basic-info" },
+  { label: "My Trips", type: "route", href: "/my-trips" },
+  { label: "Wallet & Credits", type: "section", target: "wallet" },
+  { label: "Travellers", type: "section", target: "travellers" },
+  { label: "Documents", type: "section", target: "documents" },
+  { label: "Rewards", type: "section", target: "rewards" },
+  { label: "Notifications", type: "section", target: "notifications" },
+  { label: "Support", type: "route", href: "/support" },
+  { label: "Security", type: "section", target: "security" },
+  { label: "Logout", type: "action", action: "logout" },
 ];
 
 function readError(payload: unknown, fallback: string): string {
@@ -64,6 +70,8 @@ function money(value?: number): string {
 export default function CustomerAccountClient({ firstName }: { firstName: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [activeSection, setActiveSection] = useState("basic-info");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -178,6 +186,24 @@ export default function CustomerAccountClient({ firstName }: { firstName: string
     }
   }
 
+  function scrollToSection(sectionId: string) {
+    setActiveSection(sectionId);
+    const section = document.getElementById(sectionId);
+    if (section) {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await fetch("/api/customer-auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
+
   if (loading) {
     return (
       <section className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
@@ -195,13 +221,39 @@ export default function CustomerAccountClient({ firstName }: { firstName: string
         <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <nav className="space-y-1">
             {SIDEBAR_ITEMS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                {item}
-              </button>
+              <div key={item.label}>
+                {item.type === "section" ? (
+                  <button
+                    type="button"
+                    onClick={() => scrollToSection(item.target)}
+                    className={`block w-full rounded-xl px-3 py-2 text-left text-sm font-medium ${
+                      activeSection === item.target
+                        ? "bg-sky-50 text-[#199ce0]"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ) : null}
+                {item.type === "route" ? (
+                  <Link
+                    href={item.href}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {item.label}
+                  </Link>
+                ) : null}
+                {item.type === "action" ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleLogout()}
+                    disabled={loggingOut}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {loggingOut ? "Logging out..." : item.label}
+                  </button>
+                ) : null}
+              </div>
             ))}
           </nav>
         </aside>
@@ -227,7 +279,7 @@ export default function CustomerAccountClient({ firstName }: { firstName: string
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div id="basic-info" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900">
                 <UserCircle2 className="h-4 w-4 text-[#199ce0]" />
                 Basic Information
@@ -257,10 +309,10 @@ export default function CustomerAccountClient({ firstName }: { firstName: string
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div id="security" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900">
                 <Shield className="h-4 w-4 text-[#199ce0]" />
-                Contact Details
+                Contact Details & Security
               </h2>
               <div className="space-y-2 text-sm text-slate-700">
                 <p>
@@ -282,7 +334,7 @@ export default function CustomerAccountClient({ firstName }: { firstName: string
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div id="documents" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900">
                 <FileText className="h-4 w-4 text-[#199ce0]" />
                 Travel Documents
@@ -314,7 +366,7 @@ export default function CustomerAccountClient({ firstName }: { firstName: string
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div id="travellers" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-slate-900">
                 <Users className="h-4 w-4 text-[#199ce0]" />
                 Additional Travellers
@@ -374,21 +426,21 @@ export default function CustomerAccountClient({ firstName }: { firstName: string
           </div>
 
           <div className="grid gap-4 xl:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div id="rewards" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Gift className="h-4 w-4 text-[#199ce0]" />
                 Rewards & Loyalty
               </h3>
               <p className="text-sm text-slate-600">Tier: {tierLabel}. Rewards modules are future-ready.</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div id="notifications" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Bell className="h-4 w-4 text-[#199ce0]" />
                 Notifications
               </h3>
               <p className="text-sm text-slate-600">Manage booking, payment, and support updates.</p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div id="wallet" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <CreditCard className="h-4 w-4 text-[#199ce0]" />
                 Wallet & Credits

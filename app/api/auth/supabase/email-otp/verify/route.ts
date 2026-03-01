@@ -1,5 +1,5 @@
 import { apiError, apiSuccess } from "@/lib/backend/http";
-import { ensureIdentityProfile } from "@/lib/auth/identityProfiles";
+import { ensureIdentityProfile, getIdentityProfileByUserId } from "@/lib/auth/identityProfiles";
 import { applySupabaseSessionCookie, sanitizeNextPath } from "@/lib/auth/supabaseSession";
 import {
   SupabaseAuthRequestError,
@@ -17,6 +17,7 @@ interface VerifyEmailOtpBody {
   email?: string;
   token?: string;
   next?: string;
+  intent?: "login" | "signup";
 }
 
 function normalizeEmail(value: string | undefined): string {
@@ -33,12 +34,14 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as VerifyEmailOtpBody;
     const email = normalizeEmail(body.email);
     const token = (body.token || "").trim();
+    const intent = body.intent === "signup" ? "signup" : "login";
 
     safeLog(
       "auth.supabase.email_otp.verify.requested",
       {
         requestId,
         route: "/api/auth/supabase/email-otp/verify",
+        intent,
       },
       req
     );
@@ -59,12 +62,38 @@ export async function POST(req: Request) {
       return apiError(req, 401, "otp_invalid", "OTP verification failed.");
     }
 
-    const profile = await ensureIdentityProfile({
-      userId,
-      role: "customer",
-      email: tokenPayload.user?.email || email,
-      phone: tokenPayload.user?.phone,
-    });
+    let profile = await getIdentityProfileByUserId(userId);
+    if (intent === "login") {
+      if (!profile || profile.role !== "customer") {
+        return apiError(
+          req,
+          404,
+          "account_not_found",
+          "No customer account found for this email. Please create an account first."
+        );
+      }
+    } else {
+      if (profile && profile.role === "customer") {
+        return apiError(
+          req,
+          409,
+          "account_exists",
+          "An account already exists with this email. Please sign in."
+        );
+      }
+      if (profile && profile.role !== "customer") {
+        return apiError(req, 403, "forbidden_role", "This account is not configured for customer signup.");
+      }
+      profile =
+        profile ||
+        (await ensureIdentityProfile({
+          userId,
+          role: "customer",
+          email: tokenPayload.user?.email || email,
+          phone: tokenPayload.user?.phone,
+        }));
+    }
+
     const resolvedRole = profile?.role || "customer";
     if (resolvedRole !== "customer") {
       return apiError(req, 403, "forbidden_role", "This account is not configured for customer login.");
@@ -142,4 +171,3 @@ export async function POST(req: Request) {
     return apiError(req, 500, "otp_invalid", "Failed to verify email OTP.");
   }
 }
-
