@@ -107,10 +107,18 @@ function LoginContent() {
         }
 
         if (requiresPhoneVerificationParam) {
-          setError("Please sign in with Google first, then verify mobile OTP.");
+          setError("Google session expired. Click Continue with Google again.");
+          const cleaned = new URL(window.location.href);
+          cleaned.searchParams.delete("require_mobile_otp");
+          window.history.replaceState({}, "", cleaned.toString());
         }
       } catch {
-        // no-op
+        if (requiresPhoneVerificationParam) {
+          setError("Google session expired. Click Continue with Google again.");
+          const cleaned = new URL(window.location.href);
+          cleaned.searchParams.delete("require_mobile_otp");
+          window.history.replaceState({}, "", cleaned.toString());
+        }
       } finally {
         setMeChecked(true);
       }
