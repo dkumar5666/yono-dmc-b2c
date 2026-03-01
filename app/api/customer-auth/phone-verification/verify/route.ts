@@ -57,17 +57,38 @@ export async function POST(req: Request) {
       return apiError(req, 400, "otp_required", "OTP is required.");
     }
 
+    let sessionUserId = session.userId;
+    let sessionRole = role;
+    let sessionEmail = session.email || profile?.email || undefined;
+    let sessionFullName = session.fullName || profile?.full_name || undefined;
+    let sessionAccessToken = session.accessToken;
+    let sessionRefreshToken = session.refreshToken;
+    let sessionExpiresAt = session.expiresAt;
+    let sessionTokenType = session.tokenType;
+
     if (context.provider === "supabase_phone") {
       const verify = await verifyPhoneOtp({ phone, token: otp });
       const verifiedUserId = safeString(verify.user?.id);
-      if (verifiedUserId && verifiedUserId !== session.userId) {
-        return apiError(
-          req,
-          409,
-          "phone_already_in_use",
-          "This mobile number is already linked with another account."
-        );
+      if (verifiedUserId) {
+        sessionUserId = verifiedUserId;
       }
+
+      const verifiedProfile = verifiedUserId ? await getIdentityProfileByUserId(verifiedUserId) : null;
+      const verifiedRole = verifiedProfile?.role || sessionRole || "customer";
+      if (verifiedRole !== "customer") {
+        return apiError(req, 403, "forbidden", "Only customer accounts can verify mobile here.");
+      }
+
+      sessionRole = verifiedRole;
+      sessionEmail = verify.user?.email || verifiedProfile?.email || sessionEmail;
+      sessionFullName = sessionFullName || verifiedProfile?.full_name || undefined;
+      sessionAccessToken = verify.access_token || sessionAccessToken;
+      sessionRefreshToken = verify.refresh_token || sessionRefreshToken;
+      sessionExpiresAt =
+        typeof verify.expires_at === "number"
+          ? verify.expires_at * 1000
+          : Date.now() + Math.max(60, verify.expires_in ?? 3600) * 1000;
+      sessionTokenType = verify.token_type || sessionTokenType;
     } else {
       const verify = await verifyOtpWithTwilio({ phone, token: otp });
       if (!verify.approved) {
@@ -82,7 +103,7 @@ export async function POST(req: Request) {
         new URLSearchParams({
           select: "id,phone",
           phone: `eq.${phone}`,
-          id: `neq.${session.userId}`,
+          id: `neq.${sessionUserId}`,
         })
       )
       .catch(() => null);
@@ -100,7 +121,7 @@ export async function POST(req: Request) {
         "profiles",
         new URLSearchParams({
           select: "id,role,full_name,email,phone",
-          id: `eq.${session.userId}`,
+          id: `eq.${sessionUserId}`,
         }),
         { phone }
       )
@@ -117,17 +138,17 @@ export async function POST(req: Request) {
     applySupabaseSessionCookie(
       response,
       {
-        access_token: session.accessToken,
-        refresh_token: session.refreshToken,
-        expires_at: Math.floor(session.expiresAt / 1000),
-        token_type: session.tokenType,
+        access_token: sessionAccessToken,
+        refresh_token: sessionRefreshToken,
+        expires_at: Math.floor(sessionExpiresAt / 1000),
+        token_type: sessionTokenType,
       },
       {
-        userId: session.userId,
-        role,
-        email: session.email || profile?.email || undefined,
+        userId: sessionUserId,
+        role: sessionRole,
+        email: sessionEmail,
         phone,
-        fullName: session.fullName || profile?.full_name || undefined,
+        fullName: sessionFullName,
       }
     );
     clearCustomerPhoneVerifyCookie(response);
